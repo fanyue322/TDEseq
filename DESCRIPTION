@@ -6,7 +6,7 @@ Author: Yue Fan, Shiquan Sun
 Maintainer: Yue Fan <xafanyue@xjtu.edu.cn>
 Description: Differentially expression analysis for time series scRNA-seq data
 License: GPL (>= 2)
-Depends: R (>=4.0.3)
+Depends: R (>=4.0.2)
 Imports: coneproj (>=1.15)
 Encoding: UTF-8
 LazyData: true
