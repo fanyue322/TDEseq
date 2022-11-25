@@ -9,7 +9,7 @@
 ########################################################################################################################
 
 #' TDEseq: detecting temporal gene expression changes in the developmental stages of single-cell RNA sequencing studies.
-#' 
+#'
 #' @param data The log normalization of expression values, with genes in rows and cells in columns.
 #' @param stage A vector of stage index or time points.
 #' @param group A vector to represent the random effect.
@@ -21,6 +21,7 @@
 #' @return \item{pattern}{The most appropriate pattern for each DE genes}
 #' @return \item{ChangePoint}{The change point for DE genes, only exists for peak or recession DE genes}
 #' @author Yue Fan, Shiquan Sun
+
 
 TDEseq<-function(data,stage,group=NULL,verbose=TRUE,LMM=FALSE,threshold=0.05) {
 
@@ -76,11 +77,9 @@ ChangePoint<-ChangePoint_detection(res_dat,stage,res)
 ChangePoint<-order(unique(stage))[ChangePoint]
 res_dat$ChangePoint=ChangePoint
 }
-
 return(res_dat)
 
 }
-
 
 TDEseq_lm<-function(dat,stage,verbose=TRUE)
 {
@@ -127,7 +126,6 @@ results<-list(res=res_dat,est.inc=est.inc,est.dec=est.dec,est.cov=est.cov,est.co
 sig.con=sig_est.con,sig.cov=sig_est.cov)
 return(results)
 }
-
 
 TDEseq_lmm<-function(data,stage,group,verbose=TRUE)
 {
