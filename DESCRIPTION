@@ -1,13 +1,12 @@
 Package: TDEseq
-Type: Package
-Title: TDEseq: detecting temporal gene expression changes in the developmental stages of single-cell RNA sequencing studies
-Version: 0.1.0
+Title: What the Package Does (One Line, Title Case)
+Version: 0.0.0.9000
 Author: Yue Fan, Shiquan Sun
 Maintainer: Yue Fan <xafanyue@xjtu.edu.cn>
-Description: Differentially expression analysis for time series scRNA-seq data
-License: GPL (>= 2)
-Depends: R (>=4.0.3)
-Imports: coneproj (>=1.15)
+Description: What the package does (one paragraph).
+License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
+    license
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.2.1
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.1
