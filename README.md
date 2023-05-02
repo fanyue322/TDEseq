@@ -21,6 +21,9 @@ data(ExampleData)
 dat <- ExampleData$dat
 time <- ExampleData$time
 group <- ExampleData$group
+### Linear model version
+res=TDEseq(dat,time,LMM=FALSE)
+### Linear mixed model version
 res=TDEseq(dat,time,group=group,LMM=TRUE)
 ```
 An example of the outputs TDEseq produces:
