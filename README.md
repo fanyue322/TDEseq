@@ -21,10 +21,19 @@ data(ExampleData)
 dat <- ExampleData$dat
 time <- ExampleData$time
 group <- ExampleData$group
+```
 ### Linear model version
+```
 res=TDEseq(dat,time,LMM=FALSE)
+```
 ### Linear mixed model version
+```
 res=TDEseq(dat,time,group=group,LMM=TRUE)
+```
+### To include covariates(i.e, pseudotime)
+```
+pseudotime <- ExampleData$pseudotime
+res=TDEseq(dat,time,group=group,z=pseudotime,LMM=TRUE)
 ```
 An example of the outputs TDEseq produces:
 ```
