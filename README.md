@@ -14,7 +14,7 @@ install_github("fanyue322/TDEseq")
 # Usage
 The main function is image. You can find the instructions and an example by '?TDEseq'.
 
-##Example
+## Example
 A toy example for testing purposes only:
 ```
 data(ExampleData)
