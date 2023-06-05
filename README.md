@@ -1,6 +1,6 @@
 # TDEseq
 ![IMAGE](https://github.com/fanyue322/fanyue322.github.io/blob/master/workflow.png "TDEseq logo")  
-TDEseq is implemented as an open source R package for mQTL detecting genes with temporal dynamic expression patterns in time-series scRNA-seq  transcriptomic studies. TDEseq models the relationship between log normalized data and the corresponding time points through constrained additive mixed model and can detect the DE genes as well as its temporal dynamic pattern simultaneously. 
+TDEseq is implemented as an open source R package for detecting genes with temporal dynamic expression patterns in time-series scRNA-seq  transcriptomic studies. TDEseq models the relationship between log normalized data and the corresponding time points through constrained additive mixed model and can detect the DE genes as well as its temporal dynamic pattern simultaneously. 
 
 
 # Installation
