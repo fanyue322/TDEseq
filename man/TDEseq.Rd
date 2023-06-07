@@ -7,6 +7,7 @@
 TDEseq(
   data,
   stage,
+  z = 0,
   group = NULL,
   verbose = TRUE,
   LMM = FALSE,
