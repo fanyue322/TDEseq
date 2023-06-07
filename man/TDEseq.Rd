@@ -39,6 +39,12 @@ TDEseq(
 \description{
 TDEseq: detecting temporal gene expression changes in the developmental stages of single-cell RNA sequencing studies.
 }
+\examples{
+data(exampledata)
+data=seurat@assays$RNA@data
+stage=seurat@meta.data$stage
+res<-TDEseq(data,stage)
+}
 \author{
 Yue Fan, Shiquan Sun
 }

@@ -21,6 +21,11 @@
 #' @return \item{pattern}{The most appropriate pattern for each DE genes}
 #' @return \item{ChangePoint}{The change point for DE genes, only exists for peak or recession DE genes}
 #' @author Yue Fan, Shiquan Sun
+#' @examples
+#' data(exampledata)
+#' data=seurat@assays$RNA@data
+#' stage=seurat@meta.data$stage
+#' res<-TDEseq(data,stage)
 #' @export
 
 TDEseq<-function(data,stage,z=0,group=NULL,verbose=TRUE,LMM=FALSE,threshold=0.05) {
