@@ -14,6 +14,7 @@
 #' @param stage A vector of stage index or time points.
 #' @param group A vector to represent the random effect.
 #' @param LMM A bool value to indicate whether to perform LMM or LM analysis (default = FALSE).
+#' @param pct The percentage of cells where the gene is detected.
 #' @param threshold A numeric value to indicate significant level of DE genes (default = 0.05).
 #' @return \item{gene}{The name of genes}
 #' @return \item{pval}{P value for the fixed effect}
@@ -28,7 +29,7 @@
 #' res<-TDEseq(data,stage)
 #' @export
 
-TDEseq<-function(data,stage,z=0,group=NULL,verbose=TRUE,LMM=FALSE,threshold=0.05) {
+TDEseq<-function(data,stage,z=0,group=NULL,verbose=TRUE,LMM=FALSE,pct=0.1,threshold=0.05) {
 
 numCell=ncol(data)
 numVar=nrow(data)
@@ -45,6 +46,17 @@ if(is.null(rownames(data)))
 cat(paste("## Error: Please provide the gene names as the row names of the gene expression matrix!"))
 }
 
+numZeroCounts=rowSums(data==0)
+gene_pct=numZeroCounts/numCell
+idx=which(gene_pct<(1-pct))
+if(length(idx)==0)
+{
+cat(paste("## Error: No gene left after filtering!"))
+}else{
+data=data[idx,]
+}
+
+
 if(LMM==FALSE)
 {
 
@@ -52,7 +64,7 @@ res<-TDEseq_lm(data,stage,z=z,verbose)
 res_dat=res$res
 p=p_aggregate(res_dat[,2:5])
 res_dat$pval=p
-res_dat$padj=p.adjust(p,method='fdr')
+res_dat$padj=p.adjust(p,method='BY')
 aic=AIC(data,stage,res)
 res_dat=cbind(res_dat,aic)
 res_dat$SignificantDE='No'
@@ -62,7 +74,8 @@ res_dat$pattern=shape
 ChangePoint<-ChangePoint_detection(res_dat,stage,res)
 ChangePoint<-order(unique(stage))[ChangePoint]
 res_dat$ChangePoint<-ChangePoint
-
+fits_matrix<-GetModelFits(res_dat,res,stage)
+resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix)
 
 }else if(LMM==TRUE){
 
@@ -70,7 +83,7 @@ res<-TDEseq_lmm(data,stage,group,z=z,verbose)
 res_dat<-res$res
 p<-p_aggregate(res_dat[,2:5])
 res_dat$pval<-p
-res_dat$padj<-p.adjust(p,method='fdr')
+res_dat$padj<-p.adjust(p,method='BY')
 res_dat$SignificantDE='No'
 res_dat$SignificantDE[which(res_dat$padj<threshold)]='Yes'
 bstat<-res$bstat
@@ -81,9 +94,11 @@ res_dat$pattern=shape
 ChangePoint<-ChangePoint_detection(res_dat,stage,res)
 ChangePoint<-order(unique(stage))[ChangePoint]
 res_dat$ChangePoint=ChangePoint
+fits_matrix<-GetModelFits(res_dat,res,stage)
+resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix)
 }
 
-return(res_dat)
+return(resultTDEseq)
 
 }
 
@@ -145,17 +160,17 @@ sig_est.inc=c()
 sig_est.dec=c()
 sig_est.con=c()
 sig_est.cov=c()
-bstat=matrix(0,nrow=nrow(dat),ncol=4)
+bstat=matrix(0,nrow=nrow(data),ncol=4)
 res_dat=data.frame()
 x=stage
-for(iVar in 1:nrow(dat))
+for(iVar in 1:nrow(data))
 {
   if(verbose==TRUE)
   {
-  print(paste0('processing: ',rownames(dat)[iVar]))
+  print(paste0('processing: ',rownames(data)[iVar]))
   }
-   N=ncol(dat)
-  Expr=dat[iVar,] 
+   N=ncol(data)
+  Expr=data[iVar,] 
   
   y<-Expr
 
@@ -1518,6 +1533,26 @@ fsig = function(thhat, szs, ycl, ncl, N, edf, D, type='b') {
 	}
 	return (sig2hat)
 }
+
+GetModelFits<-function(res_dat,res,stage)
+{
+sig_gene_idx=which(res_dat$SignificantDE=='Yes')
+ModelFits=matrix(0,nrow=length(sig_gene_idx),ncol=length(unique(stage)))
+rownames(ModelFits)=res_dat$gene[sig_gene_idx]
+colnames(ModelFits)=sort(unique(stage))
+pattern=c('Growth','Recession','Trough','Peak')
+for(i in sig_gene_idx)
+{
+for(j in sort(unique(stage)))
+{
+ModelFits[res_dat$gene[i],j]=mean(res[[match(res_dat$pattern[i],pattern)+1]][i,which(stage==j)])
+}
+}
+return(ModelFits)
+}
+
+setClass("TDEseq",representation(dfTDEseqResults="data.frame",ModelFits="matrix"))
+
 #########################################
 #             CODE END                  #
 #########################################
