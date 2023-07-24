@@ -11,7 +11,11 @@ TDEseq(
   group = NULL,
   verbose = TRUE,
   LMM = FALSE,
-  threshold = 0.05
+  pct = 0.1,
+  threshold = 0.05,
+  logFC_threshold = 0,
+  max_cells_per_ident = Inf,
+  min_cells_per_timepoints = 0
 )
 }
 \arguments{
@@ -23,7 +27,15 @@ TDEseq(
 
 \item{LMM}{A bool value to indicate whether to perform LMM or LM analysis (default = FALSE).}
 
+\item{pct}{The percentage of cells where the gene is detected.}
+
 \item{threshold}{A numeric value to indicate significant level of DE genes (default = 0.05).}
+
+\item{logFC_threshold}{Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.}
+
+\item{max_cells_per_ident:}{Down sample each identity class to a max number. Default is no downsampling.}
+
+\item{min_cells_per_timepoints:Minimum}{number of cells in one of the time points.}
 }
 \value{
 \item{gene}{The name of genes}

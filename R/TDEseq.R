@@ -16,6 +16,9 @@
 #' @param LMM A bool value to indicate whether to perform LMM or LM analysis (default = FALSE).
 #' @param pct The percentage of cells where the gene is detected.
 #' @param threshold A numeric value to indicate significant level of DE genes (default = 0.05).
+#' @param logFC_threshold Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.
+#' @param max_cells_per_ident: Down sample each identity class to a max number. Default is no downsampling. 
+#' @param min_cells_per_timepoints:Minimum number of cells in one of the time points. 
 #' @return \item{gene}{The name of genes}
 #' @return \item{pval}{P value for the fixed effect}
 #' @return \item{padj}{Adjusted P value for the fixed effect}
@@ -29,12 +32,24 @@
 #' res<-TDEseq(data,stage)
 #' @export
 
-TDEseq<-function(data,stage,z=0,group=NULL,verbose=TRUE,LMM=FALSE,pct=0.1,threshold=0.05) {
+TDEseq<-function(data,stage,z=0,group=NULL,verbose=TRUE,LMM=FALSE,pct=0.1,threshold=0.05,logFC_threshold=0,max_cells_per_ident=Inf,min_cells_per_timepoints=0) {
 
 numCell=ncol(data)
 numVar=nrow(data)
+data=as.matrix(data)
 cat(paste("## number of total genes: ", numVar,"\n"))
 cat(paste("## number of total cells: ", numCell,"\n"))
+
+stage_idx=sort(unique(stage))
+stage_origin=stage
+
+points_order=0
+for(i in stage_idx)
+{
+stage[which(stage==i)]=points_order
+points_order=points_order+1
+}
+
 
 if(numCell!=length(stage))
 {
@@ -46,6 +61,60 @@ if(is.null(rownames(data)))
 cat(paste("## Error: Please provide the gene names as the row names of the gene expression matrix!"))
 }
 
+num_cell_per_timepoints=table(stage)
+
+if(max_cells_per_ident!=Inf & length(group)==0)
+{
+cat(paste("## Error: Please provide the group information for downsampling!"))
+}
+
+num_cell_per_idents=table(group)
+
+###filtering time points###
+idx=names(num_cell_per_timepoints)[which(num_cell_per_timepoints<min_cells_per_timepoints)]
+if(length(idx)>0)
+{
+for(i in idx)
+{
+data=data[,-which(stage==i)]
+if(!is.null(group))
+{
+group=group[-which(stage==i)]
+}
+stage=stage[-which(stage==i)]
+}
+}
+
+if(length(stage)==0)
+{
+cat(paste("## Error: All cells are filtered. Please provide a smaller  min_cells_per_timepoints!"))
+}
+
+###downsampling###
+#idx=names(num_cell_per_idents)[which(num_cell_per_idents>max_cells_per_ident)]
+cell_sel=c()
+for(i in unique(group))
+{
+idx=which(group==i)
+if(length(idx)>max_cells_per_ident)
+{
+cell_sel=c(cell_sel,sample(idx)[1:max_cells_per_ident])
+}else{
+cell_sel=c(cell_sel,idx)
+}
+}
+
+###filtering based on logFC###
+maxFC<-logFC_filtering(data,stage)
+idx=which(maxFC>logFC_threshold)
+if(length(idx)==0)
+{
+cat(paste("## Error: No genes left after logFC filtering!"))
+}
+
+data=data[idx,]
+
+
 numZeroCounts=rowSums(data==0)
 gene_pct=numZeroCounts/numCell
 idx=which(gene_pct<(1-pct))
@@ -55,6 +124,7 @@ cat(paste("## Error: No gene left after filtering!"))
 }else{
 data=data[idx,]
 }
+
 
 
 if(LMM==FALSE)
@@ -73,9 +143,10 @@ shape<-reassign_shape(res_dat)
 res_dat$pattern=shape
 ChangePoint<-ChangePoint_detection(res_dat,stage,res)
 ChangePoint<-order(unique(stage))[ChangePoint]
+ChangePoint<-stage_idx[ChangePoint]
 res_dat$ChangePoint<-ChangePoint
 fits_matrix<-GetModelFits(res_dat,res,stage)
-resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix)
+resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix,parameters=list(LMM=FALSE,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints))
 
 }else if(LMM==TRUE){
 
@@ -93,9 +164,10 @@ shape<-shape_bstat_lmm(res_dat)
 res_dat$pattern=shape
 ChangePoint<-ChangePoint_detection(res_dat,stage,res)
 ChangePoint<-order(unique(stage))[ChangePoint]
+ChangePoint<-stage_idx[ChangePoint]
 res_dat$ChangePoint=ChangePoint
 fits_matrix<-GetModelFits(res_dat,res,stage)
-resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix)
+resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix,parameters=list(LMM=FALSE,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints))
 }
 
 return(resultTDEseq)
@@ -1551,7 +1623,21 @@ ModelFits[res_dat$gene[i],j]=mean(res[[match(res_dat$pattern[i],pattern)+1]][i,w
 return(ModelFits)
 }
 
-setClass("TDEseq",representation(dfTDEseqResults="data.frame",ModelFits="matrix"))
+logFC_filtering<-function(data,stage)
+{
+maxFC=rep(0,nrow(data))
+stage_idx=sort(unique(stage))
+mat=matrix(0,nrow=nrow(data),ncol=length(stage_idx))
+for(i in stage_idx)
+{
+mat[,i+1]=rowMeans(as.matrix(data[,which(stage==i)]))
+}
+maxFC=apply(mat,1,max)-apply(mat,1,min)
+return(maxFC)
+}
+
+
+setClass("TDEseq",representation(dfTDEseqResults="data.frame",ModelFits="matrix",parameters="list"))
 
 #########################################
 #             CODE END                  #
