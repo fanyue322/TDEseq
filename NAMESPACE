@@ -3,4 +3,3 @@
 export(TDEseq)
 import(ConSpline)
 import(coneproj)
-useDynLib(TDEseq, .registration=TRUE)
