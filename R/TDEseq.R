@@ -53,19 +53,19 @@ points_order=points_order+1
 
 if(numCell!=length(stage))
 {
-cat(paste("## Error: the stage information and the cells are not matched!"))
+stop(paste("## Error: the stage information and the cells are not matched!"))
 }
 
 if(is.null(rownames(data)))
 {
-cat(paste("## Error: Please provide the gene names as the row names of the gene expression matrix!"))
+stop(paste("## Error: Please provide the gene names as the row names of the gene expression matrix!"))
 }
 
 num_cell_per_timepoints=table(stage)
 
 if(max_cells_per_ident!=Inf & length(group)==0)
 {
-cat(paste("## Error: Please provide the group information for downsampling!"))
+stop(paste("## Error: Please provide the group information for downsampling!"))
 }
 
 num_cell_per_idents=table(group)
@@ -87,7 +87,7 @@ stage=stage[-which(stage==i)]
 
 if(length(stage)==0)
 {
-cat(paste("## Error: All cells are filtered. Please provide a smaller  min_cells_per_timepoints!"))
+stop(paste("## Error: All cells are filtered. Please provide a smaller  min_cells_per_timepoints!"))
 }
 
 ###downsampling###
@@ -109,7 +109,7 @@ maxFC<-logFC_filtering(data,stage)
 idx=which(maxFC>logFC_threshold)
 if(length(idx)==0)
 {
-cat(paste("## Error: No genes left after logFC filtering!"))
+stop(paste("## Error: No genes left after logFC filtering!"))
 }
 
 data=data[idx,]
@@ -120,7 +120,7 @@ gene_pct=numZeroCounts/numCell
 idx=which(gene_pct<(1-pct))
 if(length(idx)==0)
 {
-cat(paste("## Error: No gene left after filtering!"))
+stop(paste("## Error: No gene left after filtering!"))
 }else{
 data=data[idx,]
 }
@@ -142,11 +142,14 @@ res_dat$SignificantDE[which(res_dat$padj<threshold)]='Yes'
 shape<-reassign_shape(res_dat)
 res_dat$pattern=shape
 ChangePoint<-ChangePoint_detection(res_dat,stage,res)
+if((!all(is.na(ChangePoint))))
+{
 ChangePoint<-order(unique(stage))[ChangePoint]
 ChangePoint<-stage_idx[ChangePoint]
+}
 res_dat$ChangePoint<-ChangePoint
 fits_matrix<-GetModelFits(res_dat,res,stage)
-resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix,parameters=list(LMM=FALSE,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints))
+resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix,parameters=list(LMM=FALSE,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints),NormalizeData=data[res_dat$gene,],Metadata=data.frame(Time=stage))
 
 }else if(LMM==TRUE){
 
@@ -163,11 +166,14 @@ res_dat<-cbind(res_dat,bstat)
 shape<-shape_bstat_lmm(res_dat)
 res_dat$pattern=shape
 ChangePoint<-ChangePoint_detection(res_dat,stage,res)
+if((!all(is.na(ChangePoint))))
+{
 ChangePoint<-order(unique(stage))[ChangePoint]
 ChangePoint<-stage_idx[ChangePoint]
+}
 res_dat$ChangePoint=ChangePoint
 fits_matrix<-GetModelFits(res_dat,res,stage)
-resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix,parameters=list(LMM=FALSE,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints))
+resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix,parameters=list(LMM=FALSE,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints),NormalizeData=data[res_dat$gene,],Metadata=data.frame(Time=stage,Group=group))
 }
 
 return(resultTDEseq)
@@ -1617,7 +1623,7 @@ for(i in sig_gene_idx)
 {
 for(j in sort(unique(stage)))
 {
-ModelFits[res_dat$gene[i],j]=mean(res[[match(res_dat$pattern[i],pattern)+1]][i,which(stage==j)])
+ModelFits[res_dat$gene[i],j+1]=mean(res[[match(res_dat$pattern[i],pattern)+1]][i,which(stage==j)])
 }
 }
 return(ModelFits)
@@ -1637,7 +1643,153 @@ return(maxFC)
 }
 
 
-setClass("TDEseq",representation(dfTDEseqResults="data.frame",ModelFits="matrix",parameters="list"))
+setClass("TDEseq",representation(dfTDEseqResults="data.frame",ModelFits="matrix",parameters="list",NormalizeData="matrix",Metadata="data.frame"))
+
+####Visualization########
+
+#' PatternHeatmap: Heatmap to show the pattern specific temporal genes. Please first install Seurat, ggplot2, ComplexHeatmap and circlize packages.
+#' 
+#' @param obj The results of TDEseq analysis
+#' @param features Genes to be shown in heatmap
+#' @param features.show Genes to be annotated in heatmap
+#' @param features.num Number of genes to be shown for each patterns 
+#' @param cols Color of the heatmap.
+#' @author Yue Fan, Shiquan Sun
+#' @export
+PatternHeatmap<-function(obj,features=NULL,features.show=NULL,features.num=50,cols=c("navy", "white", "firebrick3"))
+{
+suppressPackageStartupMessages(library("Seurat"))
+suppressPackageStartupMessages(library("ggplot2"))
+suppressPackageStartupMessages(library("ComplexHeatmap"))
+suppressPackageStartupMessages(library("circlize"))
+seu<-CreateSeuratObject(obj@NormalizeData)
+seu@assays$RNA@data<-obj@NormalizeData
+seu<-ScaleData(seu)
+mat <- GetAssayData(seu,slot = 'scale.data')
+metadata <- obj@Metadata
+res_dat=obj@dfTDEseqResults
+res_dat=res_dat[order(res_dat$pval),]
+feature_annot=c()
+if(is.null(features))
+{
+features_plot=c()
+for(pattern in c("Growth","Recession","Peak","Trough"))
+{
+idx=which(res_dat$pattern==pattern)
+if(length(idx)>=features.num)
+{
+features_plot=c(features_plot,res_dat$gene[1:features.num])
+feature_annot=c(feature_annot,rep(pattern,features.num))
+}else{
+features_plot=c(features_plot,res_dat$gene[idx])
+feature_annot=c(feature_annot,rep(pattern,length(idx)))
+}
+}
+}else{
+features_plot=c()
+idx=match(features,res_dat$gene)
+if(any(is.na(idx)))
+{
+idx=idx[-which(is.na(idx))]
+}
+features=features[idx]
+subres_dat=res_dat[idx,]
+for(pattern in c("Growth","Recession","Peak","Trough"))
+{
+idx=which(subres_dat$pattern==pattern)
+features_plot=c(features_plot,res_dat$gene[idx])
+feature_annot=c(feature_annot,rep(pattern,length(idx)))
+}
+
+}
+
+group_info <- metadata$Time
+if(!is.null(features.show))
+{
+gene_pos <- match(features.show,rownames(mat))
+row_anno <- rowAnnotation(gene=anno_mark(at=gene_pos,labels = features.show,
+                                         labels_gp=gpar(fontface = 3)))
+}										 
+col_fun = colorRamp2(c(-2, 0, 2),cols)
+
+f1=Heatmap(mat[features_plot,],
+           name = 'Expression',
+           col = col_fun,
+           cluster_rows = FALSE,                 
+           cluster_columns = F,                  
+           show_column_dend=F,                    
+           show_row_dend = F,                     
+           show_row_names = FALSE,                   
+           show_column_names = F,                 
+           column_split = group_info,      
+           row_split = feature_annot,		   
+           right_annotation = row_anno,                  
+           border_gp = gpar(col = "black", lty = 2) 
+           )		   
+return(f1)
+}
+
+#' PatternHeatmap: Feature plot to show the pattern specific temporal genes. Please first install Seurat, ggplot2 and tidydr packages.
+#' 
+#' @param obj The results of TDEseq analysis
+#' @param features Genes to be shown in feature plot
+#' @author Yue Fan, Shiquan Sun
+#' @export
+PatternFeature<-function(obj,feature)
+{
+suppressPackageStartupMessages(library("Seurat"))
+suppressPackageStartupMessages(library("ggplot2"))
+suppressPackageStartupMessages(library("tidydr"))
+#Set background and format
+tsne_theme <- theme( 
+  axis.line=element_blank(), 
+  axis.text.x=element_blank(), 
+  axis.text.y=element_blank(), 
+  axis.ticks=element_blank(), 
+  axis.title.x=element_blank(), 
+  axis.title.y=element_blank(), 
+  panel.background=element_blank(), 
+  panel.border=element_blank(), 
+  panel.grid.major=element_blank(), 
+  panel.grid.minor=element_blank()) +
+  theme_dr(xlength = 0.15, ylength = 0.15,
+           arrow = grid::arrow(length = unit(0.1, "inches"), type = "closed"))+
+  theme(panel.grid = element_blank())+theme(text = element_text(size=10))+
+  theme(axis.line.x=element_line(size=1))+
+  theme(axis.line.y=element_line(size=1))
+
+p <- FeaturePlot(
+  seurat,
+  features=feature,
+  cols = c('#690E61', '#28748D','#F6E529'),
+  max.cutoff='q98',label.size = 20)
+p=p+ tsne_theme
+return(p)
+}
+
+#' PatternHeatmap: Line plot to show the pattern specific temporal genes. Please first install ggplot2.
+#' 
+#' @param seuobj A seurat object with UMAP embeddings been calculated
+#' @param features Genes to be shown in feature plot
+#' @author Yue Fan, Shiquan Sun
+#' @export
+PatternLine<-function(obj,feature.show=NULL,cols='red')
+{
+suppressPackageStartupMessages(library("ggplot2"))
+dat=obj@ModelFits[feature.show,]
+time=sort(unique(obj@Metadata$Time))
+data=data.frame(stage=time,expr=dat)
+
+p<-ggplot(data=data,aes(x=stage,y=expr,color=cols))+
+stat_smooth(method="loess",aes(col=cols),se=FALSE,size=3)+
+theme_classic()+
+xlab("Stage")+
+ylab("log(count)+1")
+return(p)
+}
+
+
+
 
 #########################################
 #             CODE END                  #
