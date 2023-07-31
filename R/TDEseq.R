@@ -1678,7 +1678,7 @@ for(pattern in c("Growth","Recession","Peak","Trough"))
 idx=which(res_dat$pattern==pattern)
 if(length(idx)>=features.num)
 {
-features_plot=c(features_plot,res_dat$gene[1:features.num])
+features_plot=c(features_plot,res_dat$gene[idx[1:features.num]])
 feature_annot=c(feature_annot,rep(pattern,features.num))
 }else{
 features_plot=c(features_plot,res_dat$gene[idx])
