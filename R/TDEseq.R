@@ -1704,13 +1704,15 @@ feature_annot=c(feature_annot,rep(pattern,length(idx)))
 }
 
 group_info <- metadata$Time
+col_fun = colorRamp2(c(-2, 0, 2),cols)
+
 if(!is.null(features.show))
 {
 gene_pos <- match(features.show,rownames(mat))
 row_anno <- rowAnnotation(gene=anno_mark(at=gene_pos,labels = features.show,
                                          labels_gp=gpar(fontface = 3)))
-}										 
-col_fun = colorRamp2(c(-2, 0, 2),cols)
+										 
+
 
 f1=Heatmap(mat[features_plot,],
            name = 'Expression',
@@ -1725,7 +1727,25 @@ f1=Heatmap(mat[features_plot,],
            row_split = feature_annot,		   
            right_annotation = row_anno,                  
            border_gp = gpar(col = "black", lty = 2) 
-           )		   
+           )	
+}else{
+
+f1=Heatmap(mat[features_plot,],
+           name = 'Expression',
+           col = col_fun,
+           cluster_rows = FALSE,                 
+           cluster_columns = F,                  
+           show_column_dend=F,                    
+           show_row_dend = F,                     
+           show_row_names = FALSE,                   
+           show_column_names = F,                 
+           column_split = group_info,      
+           row_split = feature_annot,		                 
+           border_gp = gpar(col = "black", lty = 2) 
+           )	
+
+
+}		   
 return(f1)
 }
 
@@ -1773,19 +1793,41 @@ return(p)
 #' @param features Genes to be shown in feature plot
 #' @author Yue Fan, Shiquan Sun
 #' @export
-PatternLine<-function(obj,feature.show=NULL,cols='red')
+PatternLine<-function (obj, feature.show = NULL, cols = NULL) 
 {
-suppressPackageStartupMessages(library("ggplot2"))
-dat=obj@ModelFits[feature.show,]
-time=sort(unique(obj@Metadata$Time))
-data=data.frame(stage=time,expr=dat)
-
-p<-ggplot(data=data,aes(x=stage,y=expr,color=cols))+
-stat_smooth(method="loess",aes(col=cols),se=FALSE,size=3)+
-theme_classic()+
-xlab("Stage")+
-ylab("log(count)+1")
-return(p)
+    if(is.null(cols))
+	{
+	cols=c('#E50C7D',"#E34627","#A22066","#A474A4","#2D8573","#E1DE15","#C16728","#2578BE","#738DC8","#C0C0C0", '#7d8d8e','#2a24d0','#a2292e','#274382','#838d36')
+	}
+    suppressPackageStartupMessages(library("ggplot2"))
+	feature.show=feature.show[feature.show%in%rownames(obj@ModelFits)]
+	if(length(feature.show)==0)
+	{
+	stop(paste0("Genes to be shown are not specified!!"))
+	}
+    dat = obj@ModelFits[feature.show, ]
+    time = sort(unique(obj@Metadata$Time))
+	N=length(feature.show)
+	if(N!=1)
+	{
+	data=lapply(1:N,function(x){dat=data.frame(stage=time,expr=dat[x,],feature=feature.show[x])
+	return(dat)
+	})
+	data=do.call(rbind,data)
+	}else{
+	data=data.frame(stage=time,expr=dat,feature=feature.show)
+	}
+    p <- ggplot(data = data, aes(x = stage, y = expr, color = feature)) + 
+        stat_smooth(method = "loess", aes(col = feature), se = FALSE, size = 3) + 
+		theme_classic() + 
+		xlab("Stage") + 
+		ylab("log(count)+1")+
+		scale_colour_manual(values=cols)+
+		theme(axis.title=element_text(size=rel(2),face="bold"),
+              axis.text=element_text(size=rel(2),face="bold"),
+              legend.title=element_blank(),
+              legend.text=element_text(size=rel(2),face="bold"))
+    return(p)
 }
 
 

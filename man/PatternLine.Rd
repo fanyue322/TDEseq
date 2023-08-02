@@ -4,7 +4,7 @@
 \alias{PatternLine}
 \title{PatternHeatmap: Line plot to show the pattern specific temporal genes. Please first install ggplot2.}
 \usage{
-PatternLine(obj, feature.show = NULL, cols = "red")
+PatternLine(obj, feature.show = NULL, cols = NULL)
 }
 \arguments{
 \item{seuobj}{A seurat object with UMAP embeddings been calculated}
