@@ -1,11 +1,11 @@
 Package: TDEseq
-Title: What the Package Does (One Line, Title Case)
+Title: TDEseq: Temporal differentially expression analysis for time-series/resolved scRNA-seq data.
 Version: 1.1
 Author: Yue Fan, Shiquan Sun
 Maintainer: Yue Fan <xafanyue@xjtu.edu.cn>
-Description: What the package does (one paragraph).
+Description: TDEseq is implemented as an open source R package for detecting genes with temporal dynamic expression patterns in time-series scRNA-seq transcriptomic studies. TDEseq models the relationship between log normalized data and the corresponding time points through constrained additive mixed model and can detect the DE genes as well as its temporal dynamic pattern simultaneously.
 License: GPL (>= 2)
-Depends: R(>= 4.0.3)
+Depends: R(>= 4.0.2)
 Imports: coneproj (>= 1.15), ConSpline (>= 1.2)
 Encoding: UTF-8
 LazyData: true
