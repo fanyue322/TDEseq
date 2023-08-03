@@ -39,7 +39,7 @@ An example of the outputs TDEseq produces:
 ```
 data(example_results)
 ```
-A tutorial includes main example codes for mouse liver development analysis can be found [here](https://fanyue322.github.io/install)
+A tutorial includes main example codes for mouse liver development analysis can be found [here](https://fanyue322.github.io/TDEseq)
 ## Our group
 
  <https://sqsun.github.io/>.
