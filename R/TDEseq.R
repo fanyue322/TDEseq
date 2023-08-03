@@ -153,6 +153,16 @@ resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix,paramet
 
 }else if(LMM==TRUE){
 
+
+group_numeric=as.character(group)
+cout=1
+for(i in unique(group))
+{
+group_numeric[which(group==i)]=cout
+cout=cout+1
+}
+group=as.numeric(group_numeric)
+
 res<-TDEseq_lmm(data,stage,group,z=z,verbose)
 res_dat<-res$res
 p<-p_aggregate(res_dat[,2:5])
@@ -288,7 +298,7 @@ est.con=rbind(est.con,as.numeric(fit.conc$muhat))
 sig_est.con=c(sig_est.con,fit.conc$sig2hat)
 bstat[iVar,4]=fit.conc$bstat
 }
-res<-data.frame(gene=rownames(dat)[iVar],increasing.pvalue=fit.incr$pval,
+res<-data.frame(gene=rownames(data)[iVar],increasing.pvalue=fit.incr$pval,
 decreasing.pvalue=fit.decr$pval,convex.pvalue=fit.conv$pval,concave.pvalue=fit.conc$pval)
 res_dat=rbind(res_dat,res)
 
@@ -1787,7 +1797,7 @@ p=p+ tsne_theme
 return(p)
 }
 
-#' PatternHeatmap: Line plot to show the pattern specific temporal genes. Please first install ggplot2.
+#' PatternLine: Line plot to show the pattern specific temporal genes. Please first install ggplot2.
 #' 
 #' @param seuobj A seurat object with UMAP embeddings been calculated
 #' @param features Genes to be shown in feature plot
@@ -1829,10 +1839,3 @@ PatternLine<-function (obj, feature.show = NULL, cols = NULL)
               legend.text=element_text(size=rel(2),face="bold"))
     return(p)
 }
-
-
-
-
-#########################################
-#             CODE END                  #
-#########################################
