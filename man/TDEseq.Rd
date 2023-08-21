@@ -15,7 +15,8 @@ TDEseq(
   threshold = 0.05,
   logFC_threshold = 0,
   max_cells_per_ident = Inf,
-  min_cells_per_timepoints = 0
+  min_cells_per_timepoints = 0,
+  pseudocell = NULL
 )
 }
 \arguments{

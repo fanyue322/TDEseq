@@ -2,7 +2,7 @@
 % Please edit documentation in R/TDEseq.R
 \name{PatternLine}
 \alias{PatternLine}
-\title{PatternHeatmap: Line plot to show the pattern specific temporal genes. Please first install ggplot2.}
+\title{PatternLine: Line plot to show the pattern specific temporal genes. Please first install ggplot2.}
 \usage{
 PatternLine(obj, feature.show = NULL, cols = NULL)
 }
@@ -12,7 +12,7 @@ PatternLine(obj, feature.show = NULL, cols = NULL)
 \item{features}{Genes to be shown in feature plot}
 }
 \description{
-PatternHeatmap: Line plot to show the pattern specific temporal genes. Please first install ggplot2.
+PatternLine: Line plot to show the pattern specific temporal genes. Please first install ggplot2.
 }
 \author{
 Yue Fan, Shiquan Sun

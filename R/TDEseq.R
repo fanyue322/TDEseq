@@ -32,7 +32,7 @@
 #' res<-TDEseq(data,stage)
 #' @export
 
-TDEseq<-function(data,stage,z=0,group=NULL,verbose=TRUE,LMM=FALSE,pct=0.1,threshold=0.05,logFC_threshold=0,max_cells_per_ident=Inf,min_cells_per_timepoints=0) {
+TDEseq<-function(data,stage,z=0,group=NULL,verbose=TRUE,LMM=FALSE,pct=0.1,threshold=0.05,logFC_threshold=0,max_cells_per_ident=Inf,min_cells_per_timepoints=0,pseudocell=NULL) {
 
 numCell=ncol(data)
 numVar=nrow(data)
@@ -69,6 +69,9 @@ stop(paste("## Error: Please provide the group information for downsampling!"))
 }
 
 num_cell_per_idents=table(group)
+
+if(is.null(pseudocell))
+{
 
 ###filtering time points###
 idx=names(num_cell_per_timepoints)[which(num_cell_per_timepoints<min_cells_per_timepoints)]
@@ -113,7 +116,7 @@ stop(paste("## Error: No genes left after logFC filtering!"))
 }
 
 data=data[idx,]
-
+maxFC=maxFC[idx]
 
 numZeroCounts=rowSums(data==0)
 gene_pct=numZeroCounts/numCell
@@ -125,7 +128,15 @@ stop(paste("## Error: No gene left after filtering!"))
 data=data[idx,]
 }
 
+}else{
 
+
+seu<-cell_aggregate(data,group,stage,size=pseudocell)
+data=seu@assays$RNA@data
+group=seu@meta.data$group
+stage=seu@meta.data$stage
+
+}
 
 if(LMM==FALSE)
 {
@@ -141,6 +152,7 @@ res_dat$SignificantDE='No'
 res_dat$SignificantDE[which(res_dat$padj<threshold)]='Yes'
 shape<-reassign_shape(res_dat)
 res_dat$pattern=shape
+res_dat$logFC=maxFC
 ChangePoint<-ChangePoint_detection(res_dat,stage,res)
 if((!all(is.na(ChangePoint))))
 {
@@ -171,6 +183,7 @@ res_dat$padj<-p.adjust(p,method='BY')
 res_dat$SignificantDE='No'
 res_dat$SignificantDE[which(res_dat$padj<threshold)]='Yes'
 bstat<-res$bstat
+res_dat$logFC=maxFC
 colnames(bstat)<-c('b.inc', 'b.dec', 'b.cov', 'b.con')
 res_dat<-cbind(res_dat,bstat)
 shape<-shape_bstat_lmm(res_dat)
@@ -1652,6 +1665,37 @@ maxFC=apply(mat,1,max)-apply(mat,1,min)
 return(maxFC)
 }
 
+cell_aggregate<-function(counts,group,stage,size=20)
+{
+suppressPackageStartupMessages(library("Matrix.utils"))
+suppressPackageStartupMessages(library("Seurat"))
+meta=data.frame(cell=colnames(counts),group=group,stage=stage)
+N=length(unique(group))
+
+pseudolabel<-lapply(1:N,function(x){
+g=unique(group)[x]
+idx=sample(which(group==g))
+num=floor(length(idx)/size)+1
+pseudolabel=rep(paste0("pseudocell",1:num,"_",g),each=size)[1:length(idx)]
+return(pseudolabel)
+})
+pseudolabel=do.call(c,pseudolabel)
+meta$pseudolabel=pseudolabel
+
+pseudo_counts <- aggregate.Matrix(t(counts), 
+                       groupings = meta$pseudolabel, fun = "sum") 
+idx=duplicated(meta$pseudolabel)
+pseudo_meta=meta[which(idx==FALSE),]
+
+pseudo_counts=t(pseudo_counts)				
+idx=match(pseudo_meta$pseudolabel,colnames(pseudo_counts))		
+pseudo_counts=pseudo_counts[,idx]		
+seu<-CreateSeuratObject(pseudo_counts)
+seu<-NormalizeData(seu)	
+seu@meta.data=cbind(seu@meta.data,pseudo_meta)	   
+return(seu)
+}
+
 
 setClass("TDEseq",representation(dfTDEseqResults="data.frame",ModelFits="matrix",parameters="list",NormalizeData="matrix",Metadata="data.frame"))
 
@@ -1716,6 +1760,8 @@ feature_annot=c(feature_annot,rep(pattern,length(idx)))
 group_info <- metadata$Time
 col_fun = colorRamp2(c(-2, 0, 2),cols)
 
+mat=mat[features_plot,]
+
 if(!is.null(features.show))
 {
 gene_pos <- match(features.show,rownames(mat))
@@ -1724,7 +1770,7 @@ row_anno <- rowAnnotation(gene=anno_mark(at=gene_pos,labels = features.show,
 										 
 
 
-f1=Heatmap(mat[features_plot,],
+f1=Heatmap(mat,
            name = 'Expression',
            col = col_fun,
            cluster_rows = FALSE,                 
@@ -1740,7 +1786,7 @@ f1=Heatmap(mat[features_plot,],
            )	
 }else{
 
-f1=Heatmap(mat[features_plot,],
+f1=Heatmap(mat,
            name = 'Expression',
            col = col_fun,
            cluster_rows = FALSE,                 
