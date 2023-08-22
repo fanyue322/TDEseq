@@ -70,8 +70,7 @@ stop(paste("## Error: Please provide the group information for downsampling!"))
 
 num_cell_per_idents=table(group)
 
-if(is.null(pseudocell))
-{
+
 
 ###filtering time points###
 idx=names(num_cell_per_timepoints)[which(num_cell_per_timepoints<min_cells_per_timepoints)]
@@ -107,6 +106,13 @@ cell_sel=c(cell_sel,idx)
 }
 }
 
+if(!is.null(pseudocell))
+{
+seu<-cell_aggregate(data,group,stage,size=pseudocell)
+data=as.matrix(seu@assays$RNA@data)
+group=seu@meta.data$group
+stage=seu@meta.data$stage
+}
 ###filtering based on logFC###
 maxFC<-logFC_filtering(data,stage)
 idx=which(maxFC>logFC_threshold)
@@ -128,15 +134,6 @@ stop(paste("## Error: No gene left after filtering!"))
 data=data[idx,]
 }
 
-}else{
-
-
-seu<-cell_aggregate(data,group,stage,size=pseudocell)
-data=seu@assays$RNA@data
-group=seu@meta.data$group
-stage=seu@meta.data$stage
-
-}
 
 if(LMM==FALSE)
 {
