@@ -37,6 +37,8 @@ TDEseq<-function(X,meta=NULL,z=0,LMM=FALSE,pct=0.1,threshold=0.05,logFC_threshol
    UseMethod("TDEseq",X)
 }
 
+#' @export
+
 TDEseq.Seurat<-function(X=X,meta=NULL,z=0,LMM=FALSE,pct=0.1,threshold=0.05,logFC_threshold=0,max_cells_per_ident=Inf,min_cells_per_timepoints=0,pseudocell=NULL)
 {
 X<-NormalizeData(X)
@@ -60,6 +62,7 @@ resultTDEseq<-TDEseq.core(data=Expdata,stage=stage,group=group,z=z,LMM=LMM,pct=p
 return(resultTDEseq)
 }
 
+#' @export
 
 TDEseq.Matrix<-function(X=X,meta=meta,z=0,verbose=TRUE,LMM=FALSE,pct=0.1,threshold=0.05,logFC_threshold=0,max_cells_per_ident=Inf,min_cells_per_timepoints=0,pseudocell=NULL) {
 Expdata=X
@@ -81,6 +84,8 @@ group=Metadata$group
 resultTDEseq<-TDEseq.core(data=data,stage=stage,group=group,z=z,LMM=LMM,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints,pseudocell=pseudocell)
 return(resultTDEseq)
 }
+
+#' @export
 
 TDEseq.matrix<-TDEseq.Matrix
 
