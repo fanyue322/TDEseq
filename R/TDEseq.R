@@ -81,7 +81,7 @@ stop(paste0("Could not find column Group in Metadata."))
 }else{
 group=Metadata$group
 }
-resultTDEseq<-TDEseq.core(data=data,stage=stage,group=group,z=z,LMM=LMM,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints,pseudocell=pseudocell)
+resultTDEseq<-TDEseq.core(data=Expdata,stage=stage,group=group,z=z,LMM=LMM,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints,pseudocell=pseudocell)
 return(resultTDEseq)
 }
 
