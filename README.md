@@ -19,16 +19,18 @@ A toy example for testing purposes only:
 ```
 data(ExampleData)
 dat <- ExampleData$dat
-time <- ExampleData$time
+stage <- ExampleData$time
 group <- ExampleData$group
+metadata<-data.frame(stage=stage,group=group)
+rownames(metadata)=colnames(dat)
 ```
 ### Linear model version
 ```
-res=TDEseq(dat,time,LMM=FALSE)
+res=TDEseq(X=dat,meta=metadata,LMM=FALSE)
 ```
 ### Linear mixed model version
 ```
-res=TDEseq(dat,time,group=group,LMM=TRUE)
+res=TDEseq(X=dat,meta=metadata,LMM=TRUE)
 ```
 An example of the outputs TDEseq produces:
 ```
