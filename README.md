@@ -30,11 +30,6 @@ res=TDEseq(dat,time,LMM=FALSE)
 ```
 res=TDEseq(dat,time,group=group,LMM=TRUE)
 ```
-### To include covariates(i.e, pseudotime)
-```
-pseudotime <- ExampleData$pseudotime
-res=TDEseq(dat,time,group=group,z=pseudotime,LMM=TRUE)
-```
 An example of the outputs TDEseq produces:
 ```
 data(example_results)
