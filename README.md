@@ -12,7 +12,7 @@ install_github("fanyue322/TDEseq")
 ```
 
 # Usage
-The main function is image. You can find the instructions and an example by '?TDEseq'.
+The main function is TDEseq. You can find the instructions and an example by '?TDEseq'.
 
 ## Example
 A toy example for testing purposes only:
@@ -39,7 +39,7 @@ An example of the outputs TDEseq produces:
 ```
 data(example_results)
 ```
-A tutorial includes main example codes for mouse liver development analysis can be found [here](https://fanyue322.github.io/install)
+A tutorial includes main example codes for mouse liver development analysis can be found [here](https://fanyue322.github.io/TDEseq)
 ## Our group
 
  <https://sqsun.github.io/>.
