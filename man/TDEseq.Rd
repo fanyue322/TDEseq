@@ -5,11 +5,9 @@
 \title{TDEseq: detecting temporal gene expression changes in the developmental stages of single-cell RNA sequencing studies.}
 \usage{
 TDEseq(
-  data,
-  stage,
+  X,
+  meta = NULL,
   z = 0,
-  group = NULL,
-  verbose = TRUE,
   LMM = FALSE,
   pct = 0.1,
   threshold = 0.05,
@@ -20,11 +18,9 @@ TDEseq(
 )
 }
 \arguments{
-\item{data}{The log normalization of expression values, with genes in rows and cells in columns.}
+\item{X}{The log normalization of expression values, with genes in rows and cells in columns, or Seurat Object.}
 
-\item{stage}{A vector of stage index or time points.}
-
-\item{group}{A vector to represent the random effect.}
+\item{meta}{A data frame contained stage index and Group information.}
 
 \item{LMM}{A bool value to indicate whether to perform LMM or LM analysis (default = FALSE).}
 
@@ -34,9 +30,11 @@ TDEseq(
 
 \item{logFC_threshold}{Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.}
 
-\item{max_cells_per_ident:}{Down sample each identity class to a max number. Default is no downsampling.}
+\item{max_cells_per_ident}{Down sample each identity class to a max number. Default is no downsampling.}
 
-\item{min_cells_per_timepoints:Minimum}{number of cells in one of the time points.}
+\item{min_cells_per_timepoints}{Minimum number of cells in one of the time points.}
+
+\item{pseudocell}{Whether perform pseudo cell strategy or not. Default is NULL. Alternatively, users can set pseudocell=20 (or other integer) to perform pseudocell analysis.}
 }
 \value{
 \item{gene}{The name of genes}
@@ -55,8 +53,8 @@ TDEseq: detecting temporal gene expression changes in the developmental stages o
 \examples{
 data(exampledata)
 data=seurat@assays$RNA@data
-stage=seurat@meta.data$stage
-res<-TDEseq(data,stage)
+meta=seurat@meta.data
+res<-TDEseq(data,meta)
 }
 \author{
 Yue Fan, Shiquan Sun

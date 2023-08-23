@@ -10,15 +10,15 @@
 
 #' TDEseq: detecting temporal gene expression changes in the developmental stages of single-cell RNA sequencing studies.
 #' 
-#' @param data The log normalization of expression values, with genes in rows and cells in columns.
-#' @param stage A vector of stage index or time points.
-#' @param group A vector to represent the random effect.
+#' @param X The log normalization of expression values, with genes in rows and cells in columns, or Seurat Object.
+#' @param meta A data frame contained stage index and Group information.
 #' @param LMM A bool value to indicate whether to perform LMM or LM analysis (default = FALSE).
 #' @param pct The percentage of cells where the gene is detected.
 #' @param threshold A numeric value to indicate significant level of DE genes (default = 0.05).
 #' @param logFC_threshold Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.
-#' @param max_cells_per_ident: Down sample each identity class to a max number. Default is no downsampling. 
-#' @param min_cells_per_timepoints:Minimum number of cells in one of the time points. 
+#' @param max_cells_per_ident Down sample each identity class to a max number. Default is no downsampling. 
+#' @param min_cells_per_timepoints Minimum number of cells in one of the time points. 
+#' @param pseudocell Whether perform pseudo cell strategy or not. Default is NULL. Alternatively, users can set pseudocell=20 (or other integer) to perform pseudocell analysis.
 #' @return \item{gene}{The name of genes}
 #' @return \item{pval}{P value for the fixed effect}
 #' @return \item{padj}{Adjusted P value for the fixed effect}
@@ -28,11 +28,63 @@
 #' @examples
 #' data(exampledata)
 #' data=seurat@assays$RNA@data
-#' stage=seurat@meta.data$stage
-#' res<-TDEseq(data,stage)
+#' meta=seurat@meta.data
+#' res<-TDEseq(data,meta)
 #' @export
 
-TDEseq<-function(data,stage,z=0,group=NULL,verbose=TRUE,LMM=FALSE,pct=0.1,threshold=0.05,logFC_threshold=0,max_cells_per_ident=Inf,min_cells_per_timepoints=0,pseudocell=NULL) {
+TDEseq<-function(X,meta=NULL,z=0,LMM=FALSE,pct=0.1,threshold=0.05,logFC_threshold=0,max_cells_per_ident=Inf,min_cells_per_timepoints=0,pseudocell=NULL)
+{
+   UseMethod("TDEseq",X)
+}
+
+TDEseq.Seurat<-function(X=X,meta=NULL,z=0,LMM=FALSE,pct=0.1,threshold=0.05,logFC_threshold=0,max_cells_per_ident=Inf,min_cells_per_timepoints=0,pseudocell=NULL)
+{
+X<-NormalizeData(X)
+Expdata=as.matrix(X@assays$RNA@data)
+Metadata=X@meta.data
+vecColNamesRequired<-c("stage")
+LmmColNamesRequired<-c("group")
+if(!all(vecColNamesRequired %in% colnames(Metadata)))
+{
+stop(paste0("Could not find column",vecColNamesRequired[!(vecColNamesRequired%in%colnames(Metadata))],"in Metadata."))
+}else{
+stage=Metadata$stage
+}
+if(LMM==TRUE & (!LmmColNamesRequired%in%colnames(Metadata)))
+{
+stop(paste0("Could not find column Group in Metadata."))
+}else{
+group=Metadata$group
+}
+resultTDEseq<-TDEseq.core(data=Expdata,stage=stage,group=group,z=z,LMM=LMM,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints,pseudocell=pseudocell)
+return(resultTDEseq)
+}
+
+
+TDEseq.Matrix<-function(X=X,meta=meta,z=0,verbose=TRUE,LMM=FALSE,pct=0.1,threshold=0.05,logFC_threshold=0,max_cells_per_ident=Inf,min_cells_per_timepoints=0,pseudocell=NULL) {
+Expdata=X
+Metadata=meta
+vecColNamesRequired<-c("stage")
+LmmColNamesRequired<-c("group")
+if(!all(vecColNamesRequired %in% colnames(Metadata)))
+{
+stop(paste0("Could not find column",vecColNamesRequired[!(vecColNamesRequired%in%colnames(Metadata))],"in Metadata."))
+}else{
+stage=Metadata$stage
+}
+if(LMM==TRUE & (!LmmColNamesRequired%in%colnames(Metadata)))
+{
+stop(paste0("Could not find column Group in Metadata."))
+}else{
+group=Metadata$group
+}
+resultTDEseq<-TDEseq.core(data=data,stage=stage,group=group,z=z,LMM=LMM,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints,pseudocell=pseudocell)
+return(resultTDEseq)
+}
+
+TDEseq.matrix<-TDEseq.Matrix
+
+TDEseq.core<-function(data,stage,z=0,group=NULL,verbose=TRUE,LMM=FALSE,pct=0.1,threshold=0.05,logFC_threshold=0,max_cells_per_ident=Inf,min_cells_per_timepoints=0,pseudocell=NULL) {
 
 numCell=ncol(data)
 numVar=nrow(data)
@@ -132,6 +184,7 @@ if(length(idx)==0)
 stop(paste("## Error: No gene left after filtering!"))
 }else{
 data=data[idx,]
+maxFC=maxFC[idx]
 }
 
 
