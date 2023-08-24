@@ -1102,7 +1102,7 @@ capm <- length(delta) / n - capms
             zsend = gtil[, 1:np, drop = FALSE]
 			
 			yhat=gtil%*%bh                                                    #34.20664
-            th0 = zsend %*% solve(t(zsend) %*% zsend) %*% (t(zsend)%*%ytr)
+            th0 = zsend %*% solve(t(zsend) %*% zsend) %*% (t(zsend)%*%ytil)
 			sse0=sum((ytil-th0)^2)
 			sse1=sum((ytil-yhat)^2)
 		bstat=(sse0-sse1)/sse0
@@ -1332,7 +1332,7 @@ np = 1 + capk + sum(shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13)  + capm
             zsend = gtil[, 1:np, drop = FALSE]
 			
 			yhat=gtil%*%bh                                                    
-            th0 = zsend %*% solve(t(zsend) %*% zsend) %*% (t(zsend)%*%ytr)
+            th0 = zsend %*% solve(t(zsend) %*% zsend) %*% (t(zsend)%*%ytil)
 			sse0=sum((ytil-th0)^2)
 			sse1=sum((ytil-yhat)^2)
 		bstat=(sse0-sse1)/sse0
