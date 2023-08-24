@@ -1356,7 +1356,6 @@ np = 1 + capk + sum(shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13)  + capm
     return (rslt)
 }
 
-
 shape_bstat_lmm<-function(res_dat)
 {
 shape=rep('NA',nrow(res_dat))
@@ -2006,7 +2005,7 @@ pseudo_counts <- aggregate.Matrix(t(counts),
 idx=duplicated(meta$pseudolabel)
 pseudo_meta=meta[which(idx==FALSE),]
 
-pseudo_counts=t(pseudo_counts)				
+pseudo_counts=t(as.matrix(pseudo_counts))				
 idx=match(pseudo_meta$pseudolabel,colnames(pseudo_counts))		
 pseudo_counts=pseudo_counts[,idx]		
 seu<-CreateSeuratObject(pseudo_counts)
