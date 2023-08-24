@@ -1102,8 +1102,7 @@ capm <- length(delta) / n - capms
             zsend = gtil[, 1:np, drop = FALSE]
 			
 			yhat=gtil%*%bh                                                    #34.20664
-			pmat=zsend%*%solve(t(zsend)%*%zsend)%*%t(zsend)
-			th0=pmat%*%ytil
+            th0 = ztr %*% solve(t(ztr) %*% ztr) %*% (t(ztr)%*%ytr)
 			sse0=sum((ytil-th0)^2)
 			sse1=sum((ytil-yhat)^2)
 		bstat=(sse0-sse1)/sse0
@@ -1333,8 +1332,7 @@ np = 1 + capk + sum(shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13)  + capm
             zsend = gtil[, 1:np, drop = FALSE]
 			
 			yhat=gtil%*%bh                                                    
-			pmat=zsend%*%solve(t(zsend)%*%zsend)%*%t(zsend)
-			th0=pmat%*%ytil
+            th0 = ztr %*% solve(t(ztr) %*% ztr) %*% (t(ztr)%*%ytr)
 			sse0=sum((ytil-th0)^2)
 			sse1=sum((ytil-yhat)^2)
 		bstat=(sse0-sse1)/sse0
@@ -1358,116 +1356,6 @@ np = 1 + capk + sum(shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13)  + capm
     return (rslt)
 }
 
-coneB_lmm<-function(gmat,zvec,bigmat,np,capm,szs,ncl,ycl)
-{
- dsend = gmat[, (np + 1):(np + capm), drop = FALSE]
-        zsend = gmat[, 1:np, drop = FALSE]
-		 ans = coneB(zvec, dsend, zsend)
-            edf = ans$df
-            face = ans$face
-            bh = coef(ans)
-			    if (any(round(bh[1:np],6) < 0)) {
-                pos = (1:np)[which(round(bh[1:np],6) < 0)]
-                face = unique(c(pos, face))
-            }
-			
-        dd = t(bigmat[face, ,drop = FALSE])
-		
-		xms = ones = list()
-        st = 1
-        ed = 0
-		
-		for (icl in 1:ncl) {
-            sz = szs[icl]
-            ed = ed + sz
-            xms[[icl]] = dd[st:ed, ,drop=F]
-            onevec = 1:sz*0+1
-            onemat = onevec%*%t(onevec)
-            ones[[icl]] = onemat
-            st = ed + 1
-        }
-		
-		muhat = t(bigmat) %*% bh
-		oldmu = muhat
-#########update mu and sigma iterately##########		
-		diff = 10
-		nrep = 0
-		while (diff > 1e-7 & nrep < 10) {
-		
-		nrep = nrep + 1
-		evec = y - muhat    ##residuals a+e
-		ecl = f_ecl(evec, ncl, szs)  ## residuals by group
-        mod.lmer = NULL
-		###estimate variance of a by lmer package### 
-	#	mod.lmer = lmer(evec~-1+(1|id), REML=reml)
-    #    thhat = summary(mod.lmer)$optinfo$val^2
-		###estimate variance by grid search###
-		ansi = try(ansi0<-uniroot(fth2rm, c(1e-10, 1e+3), szs=szs, ycl=ecl, N=n, xcl=xms, p=edf, type='ub', xtx=xtx, xtx2=xtx2, xmat_face=dd, ones=ones), silent=TRUE)
-        if (class(ansi) == "try-error") {
-            thhat = 0
-        } else {
-            thhat = ansi$root
-        }
-		
-		type = "ub"
-############update mu gaven a ############		
-	ytil = NULL 
-#gtil is edges
-			gtil = NULL
-			st = 1
-			ed = 0
-			sz = max(szs)
-            pos = which(szs == sz)[1]
-            oneMat = ones[[pos]]
-			vi = diag(sz) + oneMat*thhat  ##covariance matrix
-            covi = vi
-            umat = t(chol(covi))
-            uinv = solve(umat)
-            #uinv0 is used for unbalanced
-            uinv0 = uinv
-			######L^-1*y=L^-1*(mu+xb)+e  e~N(0,I) #########
-			for (icl in 1:ncl) {
-				sz = szs[icl]
-                uinv = uinv0[1:sz, 1:sz, drop=FALSE]
-				yi = ycl[[icl]]
-				ytil = c(ytil, uinv %*% as.matrix(yi, ncol=1))
-				ed = ed + sz
-				gtil = rbind(gtil, uinv %*% gmat[st:ed, ,drop=F])
-				st = ed + 1
-			}
-			#####weighted coneB #########
-			dsend = gtil[, (np + 1):(np + capm), drop = FALSE]
-            zsend = gtil[, 1:np, drop = FALSE]
-            ans = coneB(ytil, dsend, vmat = zsend, face=face)
-            edf = ans$df
-            face = ans$face
-            bh = coef(ans)
-			    if (any(round(bh[1:np],6) < 0)) {
-                pos = (1:np)[which(round(bh[1:np],6) < 0)]
-                face = unique(c(pos, face))
-                }
-			muhat = t(bigmat) %*% bh
-			diff = mean((oldmu - muhat)^2)
-			oldmu = muhat
-            dd = t(bigmat[face, ,drop = FALSE])
-            dd2 = gtil[,face,drop=FALSE]
-                xms = list()
-                st = 1
-                ed = 0
-                for (icl in 1:ncl) {
-                    sz = szs[icl]
-                    ed = ed + sz
-                    xms[[icl]] = dd[st:ed, ,drop=F]
-                    st = ed + 1
-                }
-			}
-		ebars = sapply(ecl, mean)
-		sig2hat = fsig(thhat, szs, ecl, ncl, N=n, edf=edf, D=nrow(bigmat), type=type)
-		siga2hat = sig2hat * thhat 
-		ahat = ebars*szs*thhat/(1+szs*thhat)
-		rslt = list(muhat = muhat,  bh = bh,ahat = ahat, sig2hat = sig2hat, siga2hat = siga2hat, thhat = thhat, bigmat = bigmat,df=edf)
-        return (rslt)
-}
 
 shape_bstat_lmm<-function(res_dat)
 {
