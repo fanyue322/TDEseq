@@ -107,6 +107,14 @@ stage[which(stage==i)]=points_order
 points_order=points_order+1
 }
 
+reorder_idx=order(stage)
+stage=stage[reorder_idx]
+stage_origin=stage_origin[reorder_idx]
+data=data[,reorder_idx]
+if(!is.null(group))
+{
+group=group[reorder_idx]
+}
 
 if(numCell!=length(stage))
 {
@@ -216,7 +224,7 @@ ChangePoint<-stage_idx[ChangePoint]
 }
 res_dat$ChangePoint<-ChangePoint
 fits_matrix<-GetModelFits(res_dat,res,stage)
-resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix,parameters=list(LMM=FALSE,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints),NormalizeData=data[res_dat$gene,],Metadata=data.frame(Time=stage))
+resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix,parameters=list(LMM=FALSE,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints),NormalizeData=data[res_dat$gene,],Metadata=data.frame(Time=stage,Time_Origin=stage_origin))
 
 }else if(LMM==TRUE){
 
@@ -251,7 +259,7 @@ ChangePoint<-stage_idx[ChangePoint]
 }
 res_dat$ChangePoint=ChangePoint
 fits_matrix<-GetModelFits(res_dat,res,stage)
-resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix,parameters=list(LMM=FALSE,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints),NormalizeData=data[res_dat$gene,],Metadata=data.frame(Time=stage,Group=group))
+resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix,parameters=list(LMM=FALSE,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints),NormalizeData=data[res_dat$gene,],Metadata=data.frame(Time=stage,Group=group,Time_Origin=stage_origin))
 }
 
 return(resultTDEseq)
@@ -2075,7 +2083,7 @@ feature_annot=c(feature_annot,rep(pattern,length(idx)))
 
 }
 
-group_info <- metadata$Time
+group_info <- metadata$Time_Origin
 col_fun = colorRamp2(c(-2, 0, 2),cols)
 
 mat=mat[features_plot,]
@@ -2180,7 +2188,7 @@ PatternLine<-function (obj, feature.show = NULL, cols = NULL)
 	stop(paste0("Genes to be shown are not specified!!"))
 	}
     dat = obj@ModelFits[feature.show, ]
-    time = sort(unique(obj@Metadata$Time))
+    time = sort(unique(obj@Metadata$Time_Origin))
 	N=length(feature.show)
 	if(N!=1)
 	{
@@ -2195,7 +2203,7 @@ PatternLine<-function (obj, feature.show = NULL, cols = NULL)
         stat_smooth(method = "loess", aes(col = feature), se = FALSE, size = 3) + 
 		theme_classic() + 
 		xlab("Stage") + 
-		ylab("log(count)+1")+
+		ylab("log(count+1)")+
 		scale_colour_manual(values=cols)+
 		theme(axis.title=element_text(size=rel(2),face="bold"),
               axis.text=element_text(size=rel(2),face="bold"),
