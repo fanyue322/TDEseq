@@ -16,10 +16,10 @@ The main function is TDEseq. You can find the instructions and an example by '?T
 ## Example
 A toy example for testing purposes only:
 ```
-data(ExampleData)
-dat <- ExampleData$dat
-stage <- ExampleData$time
-group <- ExampleData$group
+data(exampledata)
+dat=seurat@assays$RNA@data
+stage <- seurat@meta.data$stage
+group <- seurat@meta.data$batch
 metadata<-data.frame(stage=stage,group=group)
 rownames(metadata)=colnames(dat)
 ```
@@ -30,10 +30,6 @@ res=TDEseq(X=dat,meta=metadata,LMM=FALSE)
 ### Linear mixed model version
 ```
 res=TDEseq(X=dat,meta=metadata,LMM=TRUE)
-```
-An example of the outputs TDEseq produces:
-```
-data(example_results)
 ```
 A tutorial includes main example codes for mouse liver development analysis can be found [here](https://fanyue322.github.io/TDEseq)
 ## Our group
