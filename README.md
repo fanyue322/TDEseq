@@ -3,7 +3,7 @@
 TDEseq is implemented as an open source R package for detecting genes with temporal dynamic expression patterns in time-series scRNA-seq transcriptomic studies. TDEseq primarily builds upon the linear additive mixed model (LAMM) framework, with a random effect term to account for correlated samples in time-resolved or time-course scRNA-seq studies. In this model, we typically introduce the quadratic I-splines and cubic C-splines as basis functions, which facilitate the detection of four potential temporal gene expression patterns, i.e., growth, recession, peak, and trough. This vignette will illustrate some uses and visulization of TDEseq.
 
 # Installation
-TDEseq is implemented as an R package, which can be installed from either GitHub.
+TDEseq is implemented as an R package, which can be installed from GitHub.
 
 ```
 library(devtools)
