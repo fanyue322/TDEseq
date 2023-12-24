@@ -25,7 +25,7 @@ seurat
 #> Active assay: RNA (200 features, 0 variable features)
 ```
 ### Create a TDEseq object
-We show how to create a TDEseqObject object. We can create a TDEseqObject using the count matrix and meta data. Although we provide normalize function to perform log normalization for raw counts data, we recommend the users provided their own normalized scRNA-seq data. 
+We show how to create a TDEseqObject object. We can create a TDEseqObject using the count matrix and meta data. Although we provide normalize function to perform log normalization for raw counts data, we recommend the users provided their own normalized scRNA-seq data. The time points information and sample information (for mixed model only) should be contained in the meta.data.
 ```
 counts=Seurat::GetAssayData(seurat,'counts')
 norm.data=Seurat::GetAssayData(seurat,'data')
@@ -46,12 +46,40 @@ sce <- SingleCellExperiment::SingleCellExperiment(list(counts=counts,logcounts=d
 tde <- CreateTDEseqObject(counts = sce)
 ```
 ### Fit TDEseq using simulated data
+Add the parameter setting of TDEseq. 
 ```
-res=TDEseq(X=dat,meta=metadata,LMM=FALSE)
+tde_method = "cell"
+tde_param = list(sample.var = "batch",
+                 stage.var = "stage",
+                 fit.model = "lm",
+				         num.core=10)
+tde <- tdeseq(object = tde, tde.param=tde_param)
 ```
-### Linear mixed model version
+Users need to specify which column in the meta.data corresponds to sample and time points information by setiing `sample.var` and `stage.var`. We set `fit.model="lm"` to perform linear version of TDEseq. Uesr can perform mixed version of TDEseq by setting `fit.model="lmm"`.
+
+### Other options
+User can set other parameters to perform some preprocessing steps. This parameter will do four things:
 ```
-res=TDEseq(X=dat,meta=metadata,LMM=TRUE)
+tde_param = list(sample.var = "batch",
+                 stage.var = "stage",
+                 fit.model = "lm",
+                 pct = 0.1,
+                 tde.thr = 0.05,
+                 lfc = 0.1,
+                 max.gcells = Inf,
+                 min.tcells = 3,
+				         num.core=10)
+tde <- tdeseq(object = tde, tde.param=tde_param)
+```
+1. Remove time points with too few cells by setting `min.tcells`. Here, time points with less than 3 cells will be removed.
+2. Filter genes that are only expressed in a few cells by setting `pct`. Here, genes with more than 90% of zero counts will be filtered out.
+3. Filter genes that show small average X-fold difference (log-scale) between any two time points by setting `lfc`. Here, we limit testing to genes which show at least 0.1-fold difference between any two time points.
+4. Downsample cells by setting `max.gcells`. If max.gcells is smaller than the given number of cells in a sample, the down-sampling will be active. Here, we do not perform downsampling by setting `max.gcells=Inf`.
+
+### Get results
+The results of TDEseq analysis are stored in TDEseqObject. User can obtain the results by
+```
+result<-GetAssayData(tde,'tde')
 ```
 A tutorial includes main example codes for mouse liver development analysis can be found [here](https://fanyue322.github.io/TDEseq)
 ## Our group
