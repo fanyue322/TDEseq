@@ -16,6 +16,8 @@ PatternHeatmap(
 \arguments{
 \item{obj}{The results of TDEseq analysis}
 
+\item{stage.id}{The column name of time points information in metadata.}
+
 \item{features}{Genes to be shown in heatmap}
 
 \item{features.show}{Genes to be annotated in heatmap}

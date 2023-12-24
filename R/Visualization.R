@@ -3,6 +3,7 @@
 #' PatternHeatmap: Heatmap to show the pattern specific temporal genes. Please first install Seurat, ggplot2, ComplexHeatmap and circlize packages.
 #' 
 #' @param obj The results of TDEseq analysis
+#' @param stage.id The column name of time points information in metadata.
 #' @param features Genes to be shown in heatmap
 #' @param features.show Genes to be annotated in heatmap
 #' @param features.num Number of genes to be shown for each patterns 

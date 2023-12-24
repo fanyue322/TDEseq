@@ -22,6 +22,10 @@
 \arguments{
 \item{object}{Gene expression matrix}
 
+\item{sample.id}{Column names of sample information in metadata.}
+
+\item{stage.id}{Column names of time points/stage information in metadata. The time points or stage information should be provided as numeric data.}
+
 \item{pct}{The percentage of cells where the gene is detected.}
 
 \item{tde.thr}{A numeric value to indicate significant level of DE genes (default = 0.05).}

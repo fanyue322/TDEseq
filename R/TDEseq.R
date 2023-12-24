@@ -12,6 +12,8 @@
 #' Fitting the constrained spline model to perform temporal differential expression analysis for time course scRNA-seq data
 #' 
 #' @param object Gene expression matrix
+#' @param sample.id Column names of sample information in metadata. 
+#' @param stage.id Column names of time points/stage information in metadata. The time points or stage information should be provided as numeric data.
 #' @param fit.method Either 'lmm' or 'lm' to perform (default = lmm).
 #' @param pct The percentage of cells where the gene is detected.
 #' @param tde.thr A numeric value to indicate significant level of DE genes (default = 0.05).
