@@ -402,6 +402,8 @@ tdeseq.TDEseq <- function(object,
 #' @examples
 #' tdeseq(object)
 #'
+#' @export
+#'
 tdeseq <- function(object, ...) {
 	UseMethod(generic = "tdeseq", object = object)
 }## end func
