@@ -417,8 +417,8 @@ CreateTDEseqObject.Seurat <- function(counts,
   }## end fi
   ## create the list for assays
   assay.list <- list()
-  assay.data <- CreateObject.Each(counts = Seurat::GetTDEseqAssayData(counts, slot="counts"),
-                                  data = Seurat::GetTDEseqAssayData(counts, slot="data"),
+  assay.data <- CreateObject.Each(counts = Seurat::GetAssayData(counts, slot="counts"),
+                                  data = Seurat::GetAssayData(counts, slot="data"),
                                   meta.data = slot(counts, name="meta.data"),
                                   min.cells = min.cells,
                                   pct.cells = pct.cells,

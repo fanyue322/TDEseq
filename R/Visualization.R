@@ -15,13 +15,14 @@ suppressPackageStartupMessages(library("Seurat"))
 suppressPackageStartupMessages(library("ggplot2"))
 suppressPackageStartupMessages(library("ComplexHeatmap"))
 suppressPackageStartupMessages(library("circlize"))
-seu<-CreateSeuratObject(obj@NormalizeData)
-seu@assays$RNA@data<-obj@NormalizeData
+data.norm<-GetTDEseqAssayData(tde,'data')
+seu<-CreateSeuratObject(data.norm)
+seu@assays$RNA@data<-data.norm
 seu<-ScaleData(seu)
 mat <- GetAssayData(seu,slot = 'scale.data')
-metadata <- obj@Metadata
-res_dat=obj@dfTDEseqResults
-res_dat=res_dat[order(res_dat$pval),]
+metadata <- GetTDEseqAssayData(tde,'meta.data')
+res_dat=GetTDEseqAssayData(tde,'tde')
+res_dat=res_dat[order(res_dat$pvalue),]
 feature_annot=c()
 if(is.null(features))
 {
@@ -56,7 +57,7 @@ feature_annot=c(feature_annot,rep(pattern,length(idx)))
 
 }
 
-group_info <- metadata$Time_Origin
+group_info <- metadata$stage
 col_fun = colorRamp2(c(-2, 0, 2),cols)
 
 mat=mat[features_plot,]
@@ -109,7 +110,7 @@ return(f1)
 #' @param obj The results of TDEseq analysis
 #' @param features Genes to be shown in feature plot
 #' @author Yue Fan, Shiquan Sun
-#' @export
+
 PatternFeature<-function(obj,feature)
 {
 suppressPackageStartupMessages(library("Seurat"))
@@ -147,7 +148,7 @@ return(p)
 #' @param seuobj A seurat object with UMAP embeddings been calculated
 #' @param features Genes to be shown in feature plot
 #' @author Yue Fan, Shiquan Sun
-#' @export
+
 PatternLine<-function (obj, feature.show = NULL, cols = NULL) 
 {
     if(is.null(cols))
