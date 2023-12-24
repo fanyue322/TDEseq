@@ -6,6 +6,7 @@
 \usage{
 PatternHeatmap(
   obj,
+  stage.id,
   features = NULL,
   features.show = NULL,
   features.num = 50,

@@ -9,7 +9,7 @@
 #' @param cols Color of the heatmap.
 #' @author Yue Fan, Shiquan Sun
 #' @export
-PatternHeatmap<-function(obj,features=NULL,features.show=NULL,features.num=50,cols=c("navy", "white", "firebrick3"))
+PatternHeatmap<-function(obj,stage.id,features=NULL,features.show=NULL,features.num=50,cols=c("navy", "white", "firebrick3"))
 {
 suppressPackageStartupMessages(library("Seurat"))
 suppressPackageStartupMessages(library("ggplot2"))
