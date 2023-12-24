@@ -394,8 +394,8 @@ tdeseq.TDEseq <- function(object,
 #' @param object An object
 #' @param ... Arguments passed to other methods
 #'
-#' @rdname TDEseq
-#' @export TDEseq
+#' @rdname tdeseq
+#' @export tdeseq
 #'
 #' @concept data-access
 #'
