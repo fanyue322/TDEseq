@@ -82,7 +82,7 @@ tde <- tdeseq(object = tde, tde.param=tde_param)
 The results of TDEseq analysis are stored in TDEseqObject. User can obtain the results by
 ```
 ## Get the results of TDEseq analysis for each gene
-result<-GetTDEseqAssayData(tde,'tde')  
+result<-GetTDEseqAssayData(tde,slot='tde')  
 ```
 A tutorial includes main example codes for mouse liver development analysis can be found [here](https://fanyue322.github.io/TDEseq)
 ## Our group
