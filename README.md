@@ -27,9 +27,10 @@ seurat
 ### Create a TDEseq object
 We show how to create a TDEseqObject object. We can create a TDEseqObject using the count matrix and meta data. Although we provide normalize function to perform log normalization for raw counts data, we recommend the users provided their own normalized scRNA-seq data. The time points information and sample information (for mixed model only) should be contained in the meta.data.
 ```
-counts=Seurat::GetAssayData(seurat,'counts')
-norm.data=Seurat::GetAssayData(seurat,'data')
-tde <- CreateTDEseqObject(counts = counts, data=norm.data, meta.data = seurat@meta.data)
+counts<-Seurat::GetAssayData(seurat,'counts')   ##raw counts data
+norm.data<-Seurat::GetAssayData(seurat,'data')  ##log normalized data
+meta.data<-seurat@meta.data                     ##metadata
+tde <- CreateTDEseqObject(counts = counts, data=norm.data, meta.data = meta.data)
 ```
 Note: the time points and sample information must be contained in the meta data.
 
@@ -48,8 +49,8 @@ tde <- CreateTDEseqObject(counts = sce)
 ### Fit TDEseq using simulated data
 Add the parameter setting of TDEseq. 
 ```
-tde_method = "cell"
-tde_param = list(sample.var = "batch",
+tde_method <- "cell"
+tde_param <- list(sample.var = "batch",
                  stage.var = "stage",
                  fit.model = "lm",
 				 tde.thr = 0.05,
@@ -61,7 +62,7 @@ Users need to specify which column in the meta.data corresponds to sample and ti
 ### Other options
 User can set other parameters to perform some preprocessing steps. This parameter will do four things:
 ```
-tde_param = list(sample.var = "batch",
+tde_param <- list(sample.var = "batch",
                  stage.var = "stage",
                  fit.model = "lm",
                  pct = 0.1,
