@@ -278,8 +278,8 @@ tdeseq.Assay <- function(object,
                         	verbose = TRUE, ...) {
 	
   ## data use
-	data.use <- GetAssayData(object = object, slot = slot.use)
-	meta.data <- GetAssayData(object = object, slot = "meta.data")
+	data.use <- GetTDEseqAssayData(object = object, slot = slot.use)
+	meta.data <- GetTDEseqAssayData(object = object, slot = "meta.data")
 	
 	if(tde.param$sample.var %in% colnames(meta.data)){
 	  sample.id <- meta.data[,tde.param$sample.var,drop=TRUE]
@@ -295,7 +295,7 @@ tdeseq.Assay <- function(object,
 	
 
 	if(length(data.use) == 0){
-	  counts <- GetAssayData(object = object, slot = "counts")
+	  counts <- GetTDEseqAssayData(object = object, slot = "counts")
 	  if(length(counts) == 0){
 	    stop(paste0("TDEseq::Please provide the slot ", slot.use, " data before running TDEseq function. \n"))
 	  }else{
