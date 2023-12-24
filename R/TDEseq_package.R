@@ -1,4 +1,6 @@
 #' @import coneproj
-#' @import Matrix.utils
+#' @import sjmisc
+#' @import lme4
 #' @export TDEseq
 NULL
+

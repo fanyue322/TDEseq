@@ -1,234 +1,474 @@
-########################################################################################################################
+#####################################################################
 # Package: TDEseq
-# Version: 1.0
-# Date   : 2022-11-22
-# Title  : TDEseq: detecting temporal gene expression changes in the developmental stages of single-cell RNA sequencing studies
+# Version: 0.0.1
+# Modified: 2023-12-9 10:05:02
+# Title :  Detecting temporal gene expression changes in the developmental stages of single-cell RNA sequencing studies 
 # Authors: Yue Fan and Shiquan Sun
-# Contact: xafanyue@xjtu.edu.cn
-#          Xian Jiaotong university, Department of Public Health
-########################################################################################################################
+# Contacts: sqsunsph@xjtu.edu.cn;xafanyue@xjtu.edu.cn
+#          Xi'an Jiatong University, Department of Biostatistics
+######################################################################
 
-#' TDEseq: detecting temporal gene expression changes in the developmental stages of single-cell RNA sequencing studies.
+#'
+#' Fitting the binary or count spatial model to perform differential expression analysis for spatial data
 #' 
-#' @param X The log normalization of expression values, with genes in rows and cells in columns, or Seurat Object.
-#' @param meta A data frame contained stage index and Group information.
-#' @param LMM A bool value to indicate whether to perform LMM or LM analysis (default = FALSE).
+#' @param object Gene expression matrix
+#' @param fit.method Either 'lmm' or 'lm' to perform (default = lmm).
 #' @param pct The percentage of cells where the gene is detected.
-#' @param threshold A numeric value to indicate significant level of DE genes (default = 0.05).
-#' @param logFC_threshold Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.
-#' @param max_cells_per_ident Down sample each identity class to a max number. Default is no downsampling. 
-#' @param min_cells_per_timepoints Minimum number of cells in one of the time points. 
-#' @param pseudocell Whether perform pseudo cell strategy or not. Default is NULL. Alternatively, users can set pseudocell=20 (or other integer) to perform pseudocell analysis.
-#' @return \item{gene}{The name of genes}
-#' @return \item{pval}{P value for the fixed effect}
-#' @return \item{padj}{Adjusted P value for the fixed effect}
-#' @return \item{pattern}{The most appropriate pattern for each DE genes}
-#' @return \item{ChangePoint}{The change point for DE genes, only exists for peak or recession DE genes}
-#' @author Yue Fan, Shiquan Sun
+#' @param tde.thr A numeric value to indicate significant level of DE genes (default = 0.05).
+#' @param lfc Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.
+#' @param max.gcells Maximum cell per group. If max.gcells is smaller than the given number of cells in each group, the down-sampling will be active. 
+#' @param min.tcells Minimum number of cells in each time points required. 
+#' @param tdeseq.method Performing 'cell' or 'pseudocell' strategy. Default is 'cell'.
+#' 
+#' 
 #' @examples
 #' data(exampledata)
-#' data=seurat@assays$RNA@data
-#' meta=seurat@meta.data
-#' res<-TDEseq(data,meta)
+#' tde <- CreateTDEseqObject(counts = seurat)
+#' res<-tdeseq(object = tde)
+#' 
 #' @export
+#' 
 
-TDEseq<-function(X,meta=NULL,z=0,LMM=FALSE,pct=0.1,threshold=0.05,logFC_threshold=0,max_cells_per_ident=Inf,min_cells_per_timepoints=0,pseudocell=NULL)
-{
-   UseMethod("TDEseq",X)
-}
+tdeseq.default <- function(object,
+                  					tde.method = "cell",
+                  					sample.id = NULL,
+                  					stage.id = NULL,
+                  					fit.model = "lmm",
+                  					pct = 0.1,
+                  					tde.thr = 0.05,
+                  					lfc = 0.0,
+                  					max.gcells = Inf,
+                  					min.tcells = 3,
+                  					num.core = 1, 
+                  					verbose = FALSE) {
+	
 
+	
+	## reordering data ##
+	stage_idx=sort(unique(stage.id))
+	stage_origin=stage.id
+	
+	points_order=0
+    for(i in stage_idx)
+    {
+    stage.id[which(stage.id==i)]=points_order
+    points_order=points_order+1
+    }
+
+    reorder_idx=order(stage.id)
+    stage.id=stage.id[reorder_idx]
+    stage_origin=stage_origin[reorder_idx]
+    object=object[,reorder_idx]
+    if(!is.null(sample.id))
+    {
+    sample.id=sample.id[reorder_idx]
+    } 
+	
+	## filtering time points ##
+	num_cell_per_timepoints=table(stage.id)
+	idx=names(num_cell_per_timepoints)[which(num_cell_per_timepoints<min.tcells)]
+	if(length(idx)>0)
+    {
+    for(i in idx)
+    {
+    object=object[,-which(stage.id==i)]
+    if(!is.null(sample.id))
+    {
+    sample.id=sample.id[-which(stage.id==i)]
+    }
+    stage.id=stage.id[-which(stage.id==i)]
+    }
+    }
+	
+	##  downsampling  ##
+	cell_sel=c()
+    for(i in unique(sample.id))
+    {
+    idx=which(sample.id==i)
+    if(length(idx)>max.gcells)
+    {
+    cell_sel=c(cell_sel,sample(idx)[1:max.gcells])
+    }else{
+    cell_sel=c(cell_sel,idx)
+    }
+    }
+	
+	object=object[,cell_sel]
+	sample.id=sample.id[cell_sel]
+	stage.id=stage.id[cell_sel]
+    
+	## filtering features ##
+	maxFC<-logFC_filtering(object,stage.id)
+	idx=which(maxFC>lfc)
+	if(length(idx)>0)
+	{
+	object=object[idx,]
+    maxFC=maxFC[idx]
+    }
+	
+	numZeroCounts=rowSums(object==0)
+    gene_pct=numZeroCounts/ncol(object)
+    idx=which(gene_pct<(1-pct))
+    if(length(idx)>0)
+	{
+    object=object[idx,]
+    maxFC=maxFC[idx]
+    }
+    
+	## number of cells and genes
+	num_cell <- ncol(object)
+	num_gene <- nrow(object)
+	genes.use <- rownames(object)
+    
+	#################
+	cat(paste("## ===== TDEseq INPUT INFORMATION ====## \n"))
+	cat(paste("## the model fitting: ", fit.model," model\n"))
+	cat(paste("## number of total samples: ", ncol(object),"\n"))
+	cat(paste("## number of total features: ", nrow(object),"\n"))
+	cat(paste("## number of cores: ", num.core,"\n"))
+	cat(paste("## ===== END INFORMATION ==== \n"))
+	cat("\n")
+	
+    
+	
+	## main functions
+	if(tde.method == "cell"){
+	##*************************************************##
+	##   Performing Temporal DE based on Single-Cell   ##
+	##*************************************************##
+	  if(verbose) cat("# fitting cell-based TDEseq model ... \n")
+	  basis=list()
+	  basis[[1]]<-basisfunction(x=stage.id,type=1,knots=unique(stage.id),fit.model=fit.model)
+      basis[[2]]<-basisfunction(x=stage.id,type=2,knots=unique(stage.id),fit.model=fit.model)  
+	  basis[[3]]<-basisfunction(x=stage.id,type=3,knots=unique(stage.id),fit.model=fit.model)
+	  basis[[4]]<-basisfunction(x=stage.id,type=4,knots=unique(stage.id),fit.model=fit.model)
+		#=====================================
+		#res_vc <- parallel::mclapply(seq_len(num_gene), mc.cores = num.core, function(x){
+		res.tdeseq <- pbmcapply::pbmclapply(seq_len(num_gene), mc.cores = num.core, function(x){
+		  #for each condition get data as y_data
+		  tryCatch({suppressWarnings(
+		    res <- TDEseq.cell(data = object[x,],
+		                       stage = stage.id,
+		                       group = sample.id,
+		                       z = 0,
+		                       fit.model = fit.model,
+		                       basis=basis)
+		      )
+		    }, warning=function(w){ 
+		      print(w); return(res);
+		    }, error=function(e){
+		      print(e); return(NULL);
+		    }, finally={
+		      #######
+		      return(res)
+		    }
+		  )
+		})## end parallel
+	}else if(tde.method == "pseudocell"){
+	##*************************************************##
+	##   Performing Temporal DE based on PseudoCell    ##
+	##*************************************************##
+	  if(verbose) cat("# fitting pseudocell-based TDEseq model ... \n")
+	  res.tdeseq <- pbmcapply::pbmclapply(seq_len(num_gene), mc.cores = num.core, function(x){
+	    #for each condition get data as y_data
+	    tryCatch({suppressWarnings(
+	      res <- TDEseq.pseudocell(data = object[x,],
+	                               stage = stage.id,
+	                               group = sample.id,
+	                               z = 0,
+	                               LMM = fit.model,
+	                               pct = pct,
+	                               threshold = tde.thr,
+	                               logFC_threshold = lfc,
+	                               max_cells_per_ident = max.gcells,
+	                               min_cells_per_timepoints = min.tcells,
+								   num.core=num.core)
+	    )
+	    }, warning=function(w){ 
+	      print(w); return(res);
+	    }, error=function(e){
+	      print(e); return(NULL);
+	    }, finally={
+	      #######
+	      return(res)
+	    }
+	    )
+	  })## end parallel
+	}
+	
+	
+	res.tdeseq=do.call(c,res.tdeseq)
+	dfTDEseqResults<-do.call(rbind,res.tdeseq[seq(1,length(res.tdeseq),9)])
+	p=p_aggregate(dfTDEseqResults)
+	dfTDEseqResults$pvalue=p
+	rownames(dfTDEseqResults)=genes.use
+	dfTDEseqResults$gene=rownames(dfTDEseqResults)
+    dfTDEseqResults$padj=p.adjust(p,method='BY')
+	dfTDEseqResults$SignificantDE='No'
+    dfTDEseqResults$SignificantDE[which(dfTDEseqResults$padj<tde.thr)]='Yes'
+	dfTDEseqResults$pattern='None'
+	if(fit.model!='lmm')
+	{
+    aic=AIC(object,stage.id,res.tdeseq)
+    dfTDEseqResults=cbind(dfTDEseqResults,aic)
+    shape<-reassign_shape(dfTDEseqResults)
+	}else{
+	dfTDEseqResults$b.inc=do.call(c,res.tdeseq[seq(6,length(res.tdeseq),9)])
+	dfTDEseqResults$b.dec=do.call(c,res.tdeseq[seq(7,length(res.tdeseq),9)])
+	dfTDEseqResults$b.cov=do.call(c,res.tdeseq[seq(8,length(res.tdeseq),9)])
+	dfTDEseqResults$b.con=do.call(c,res.tdeseq[seq(9,length(res.tdeseq),9)])
+	shape<-shape_bstat_lmm(dfTDEseqResults)
+	}
+    dfTDEseqResults$pattern[which(dfTDEseqResults$SignificantDE=='Yes')]=shape[which(dfTDEseqResults$SignificantDE=='Yes')]
+    dfTDEseqResults$logFC=maxFC
+    ChangePoint<-ChangePoint_detection(dfTDEseqResults,stage.id,res.tdeseq)
+	if((!all(is.na(ChangePoint))))
+    {
+    ChangePoint<-order(unique(stage_origin))[ChangePoint]
+    ChangePoint<-stage_idx[ChangePoint]
+    }
+    dfTDEseqResults$ChangePoint<-ChangePoint
+	
+	
+	
+	return(dfTDEseqResults)
+}## end function 
+
+
+
+#' @param object An TDEseq object 
+#'
+#' @rdname TDEseq
+#' @param fit.method Either 'lmm' or 'lm' to perform (default = lmm).
+#' @param pct The percentage of cells where the gene is detected.
+#' @param tde.thr A numeric value to indicate significant level of DE genes (default = 0.05).
+#' @param lfc Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.
+#' @param max.gcells Maximum cell per group. If max.gcells is smaller than the given number of cells in each group, the down-sampling will be active. 
+#' @param min.tcells Minimum number of cells in each time points required. 
+#' @param tdeseq.method Performing 'cell' or 'pseudocell' strategy. Default is 'cell'.
+#' 
+#' @method TDEseq TDEseq
+#'
+#' @examples
+#' 
+#' \dontrun{
+#' data("pbmc_small")
+#' object
+#' object <- tdeseq(object = object)
+#' }
+#' 
+tdeseq.Assay <- function(object, 
+                        	assay = NULL,
+                        	slot.use = "data",
+                        	features = NULL,
+                        	tde.method = "cell",
+                        	tde.param = list(sample.var = "group",
+                        	                 stage.var = "stage",
+                        	                 fit.model = "lmm",
+                        	                 pct = 0.1,
+                        	                 tde.thr = 0.05,
+                        	                 lfc = 0.0,
+                        	                 max.gcells = Inf,
+                        	                 min.tcells = 3),
+                        	num.core = 1,
+                        	verbose = TRUE, ...) {
+	
+  ## data use
+	data.use <- GetAssayData(object = object, slot = slot.use)
+	meta.data <- GetAssayData(object = object, slot = "meta.data")
+	
+	if(tde.param$sample.var %in% colnames(meta.data)){
+	  sample.id <- meta.data[,tde.param$sample.var,drop=TRUE]
+	}else{
+	  stop("The variable 'sample.var' is not in the 'meta.data'!")
+	}## end fi
+	
+	if(tde.param$stage.var %in% colnames(meta.data)){
+	  stage.id <- meta.data[,tde.param$stage.var,drop=TRUE]
+	}else{
+	  stop("The variable 'stage.var' is not in the 'meta.data'!")
+	}## end fi
+	
+
+	if(length(data.use) == 0){
+	  counts <- GetAssayData(object = object, slot = "counts")
+	  if(length(counts) == 0){
+	    stop(paste0("TDEseq::Please provide the slot ", slot.use, " data before running TDEseq function. \n"))
+	  }else{
+	    data.use <- NormDataTDEseq(data = counts)
+	  }## end fi
+	  rm(counts);gc();
+		
+	}## end fi
+	##
+	features <- features %||% rownames(x = data.use)
+	
+	
+	## run default TDEseq, assume new.data has been ordered by combined p-values
+	new.data <- tdeseq(object = data.use[features, , drop=FALSE],
+              				tde.method = tde.method,
+              				sample.id = sample.id, 
+              				stage.id = stage.id,
+              				pct = tde.param$pct,
+              				tde.thr = tde.param$tde.thr,
+              				lfc = tde.param$lfc,
+              				max.gcells = tde.param$max.gcells,
+              				min.tcells = tde.param$min.tcells,
+              				fit.model = tde.param$fit.model,
+              				num.core = num.core,
+              				verbose = verbose, ...)
+					
+
+	## store the scaled data in the slot
+	object <- SetAssayData(object = object, slot = 'tde', new.data = new.data)
+	## store top number of features in tde slot
+}## end func
+
+#' TDEseq: detecting temporal expression changes in time-course RNA sequencing studies.
+#' @param object An TDEseq object 
+#' 
+#' 
+#' @param fit.method Either 'lmm' or 'lm' to perform (default = lmm).
+#' @param pct The percentage of cells where the gene is detected.
+#' @param tde.thr A numeric value to indicate significant level of DE genes (default = 0.05).
+#' @param lfc Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.
+#' @param max.gcells Maximum cell per group. If max.gcells is smaller than the given number of cells in each group, the down-sampling will be active. 
+#' @param min.tcells Minimum number of cells in each time points required. 
+#' @param tdeseq.method Performing 'cell' or 'pseudocell' strategy. Default is 'cell'.
+#' 
+#' @return object An TDEseq object
+#' 
+#' @author Yue Fan, Shiquan Sun
+#' 
+#' @examples
+#' data(exampledata)
+#' res <- tdeseq(object=data)
+#' 
 #' @export
+#' 
+tdeseq.TDEseq <- function(object, 
+                            assay = 'RNA',
+                            slot.use = "data",
+                            features = NULL,
+                            tde.method = "cell",
+                            tde.param = list(sample.var = "group",
+                                             stage.var = "stage",
+                                             fit.model = "lmm",
+                                             pct = 0.1,
+                                             tde.thr = 0.05,
+                                             lfc = 0.0,
+                                             max.gcells = Inf,
+                                             min.tcells = 3),
+                            num.core = 1,
+                            verbose = TRUE, ...) {
+	
+	## parallel parameter setting
+	if(num.core == 1){
+		if(slot(object, name="num.core") > 1) {num.core <- slot(object,name = "num.core")}
+	}## end fi
+	
+	## assays
+	assay <- assay %||% DefaultAssay(object = object)
+	assay.data <- GetAssay(object = object, assay = assay)
 
-TDEseq.Seurat<-function(X=X,meta=NULL,z=0,LMM=FALSE,pct=0.1,threshold=0.05,logFC_threshold=0,max_cells_per_ident=Inf,min_cells_per_timepoints=0,pseudocell=NULL)
-{
-X<-NormalizeData(X)
-Expdata=as.matrix(X@assays$RNA@data)
-Metadata=X@meta.data
-vecColNamesRequired<-c("stage")
-LmmColNamesRequired<-c("group")
-if(!all(vecColNamesRequired %in% colnames(Metadata)))
-{
-stop(paste0("Could not find column",vecColNamesRequired[!(vecColNamesRequired%in%colnames(Metadata))],"in Metadata."))
-}else{
-stage=Metadata$stage
-}
-if(LMM==TRUE & (!LmmColNamesRequired%in%colnames(Metadata)))
-{
-stop(paste0("Could not find column Group in Metadata."))
-}else{
-group=Metadata$group
-}
-resultTDEseq<-TDEseq.core(data=Expdata,stage=stage,group=group,z=z,LMM=LMM,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints,pseudocell=pseudocell)
-return(resultTDEseq)
-}
+	## run main
+	assay.data <- tdeseq(object = assay.data,
+					slot.use = slot.use,
+					features =  features,
+					tde.method = tde.method,
+					tde.param = tde.param,
+					num.core = num.core,
+					verbose = verbose, ... )
 
+	## store back the treated data
+	object@assays[[assay]] <- assay.data
+	return(object)
+}## end func
+
+
+#' Differential expression analysis for SRT
+#' @param object An object
+#' @param ... Arguments passed to other methods
+#'
+#' @rdname TDEseq
+#' @export TDEseq
+#'
+#' @concept data-access
+#'
+#' @examples
+#' tdeseq(object)
+#'
+tdeseq <- function(object, ...) {
+	UseMethod(generic = "tdeseq", object = object)
+}## end func
+
+
+
+##############################################################################################
+#'
+#' Normalize raw data
+#'
+#' Normalize count data per cell and transform to log scale via library size factor
+#'
+#' @param data Matrix with the raw count data
+#' @param scale.factor Scale the data. Default is 1e4
+#' @param verbose Print progress
+#'
+#' @return Returns a matrix with the normalize and log transformed data
+#'
+#' @import Matrix
+#' @importFrom methods as
+#'
 #' @export
+#' @concept preprocessing
+#'
+#' @examples
+#' mat <- matrix(data = rbinom(n = 25, size = 5, prob = 0.2), nrow = 5)
+#' mat
+#' mat_norm <- LogLibSF(data = mat)
+#' mat_norm
+#'
+NormDataTDEseq <- function(data, scale.factor = 1e4, verbose = TRUE) {
+  if (is.data.frame(x = data)) {
+    data <- as.matrix(x = data)
+  }## end fi
+  
+  if (!inherits(x = data, what = 'dgCMatrix')) {
+    data <- as(object = data, Class = "dgCMatrix")
+  }## end fi
+  
+  ## call Rcpp function to normalize
+  if (verbose) {
+    cat("Performing log-library size factor normalization\n", file = stderr())
+  }## end fi
+  
+  norm.data <- LogLSFactor(data, scale_factor = scale.factor)
+  colnames(x = norm.data) <- colnames(x = data)
+  rownames(x = norm.data) <- rownames(x = data)
+  return(norm.data)
+}## end func
 
-TDEseq.Matrix<-function(X=X,meta=meta,z=0,verbose=TRUE,LMM=FALSE,pct=0.1,threshold=0.05,logFC_threshold=0,max_cells_per_ident=Inf,min_cells_per_timepoints=0,pseudocell=NULL) {
-Expdata=X
-Metadata=meta
-vecColNamesRequired<-c("stage")
-LmmColNamesRequired<-c("group")
-if(!all(vecColNamesRequired %in% colnames(Metadata)))
+
+
+TDEseq.cell<-function(data,
+                      stage,
+					  group,
+					  z=0,
+					  fit.model='lmm',
+                      basis=basis)
 {
-stop(paste0("Could not find column",vecColNamesRequired[!(vecColNamesRequired%in%colnames(Metadata))],"in Metadata."))
+if(fit.model!='lmm')
+{
+fit.incr<-conspline(data,stage,basis=basis[[1]],type=1,test=TRUE)
+fit.decr<-conspline(data,stage,basis=basis[[2]],type=2,test=TRUE)
+fit.conv<-conspline(data,stage,basis=basis[[3]],type=3,test=TRUE)
+fit.conc<-conspline(data,stage,basis=basis[[4]],type=4,test=TRUE)
+
+res<-data.frame(increasing.pvalue=fit.incr$pvalx,decreasing.pvalue=fit.decr$pvalx,convex.pvalue=fit.conv$pvalx,concave.pvalue=fit.conc$pvalx)
+results<-list(res=res,est.inc=fit.incr$muhat,est.dec=fit.decr$muhat,est.cov=fit.conv$muhat,est.con=fit.conc$muhat,sig.inc=fit.incr$sighat,sig.dec=fit.decr$sighat,
+sig.cov=fit.conv$sighat,sig.con=fit.conc$sighat)
+return(results)
 }else{
-stage=Metadata$stage
-}
-if(LMM==TRUE & (!LmmColNamesRequired%in%colnames(Metadata)))
-{
-stop(paste0("Could not find column Group in Metadata."))
-}else{
-group=Metadata$group
-}
-resultTDEseq<-TDEseq.core(data=Expdata,stage=stage,group=group,z=z,LMM=LMM,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints,pseudocell=pseudocell)
-return(resultTDEseq)
-}
-
-#' @export
-
-TDEseq.matrix<-TDEseq.Matrix
-
-TDEseq.core<-function(data,stage,z=0,group=NULL,verbose=TRUE,LMM=FALSE,pct=0.1,threshold=0.05,logFC_threshold=0,max_cells_per_ident=Inf,min_cells_per_timepoints=0,pseudocell=NULL) {
-
-numCell=ncol(data)
-numVar=nrow(data)
-data=as.matrix(data)
-cat(paste("## number of total genes: ", numVar,"\n"))
-cat(paste("## number of total cells: ", numCell,"\n"))
-
-stage_idx=sort(unique(stage))
-stage_origin=stage
-
-points_order=0
-for(i in stage_idx)
-{
-stage[which(stage==i)]=points_order
-points_order=points_order+1
-}
-
-reorder_idx=order(stage)
-stage=stage[reorder_idx]
-stage_origin=stage_origin[reorder_idx]
-data=data[,reorder_idx]
-if(!is.null(group))
-{
-group=group[reorder_idx]
-}
-
-if(numCell!=length(stage))
-{
-stop(paste("## Error: the stage information and the cells are not matched!"))
-}
-
-if(is.null(rownames(data)))
-{
-stop(paste("## Error: Please provide the gene names as the row names of the gene expression matrix!"))
-}
-
-num_cell_per_timepoints=table(stage)
-
-if(max_cells_per_ident!=Inf & length(group)==0)
-{
-stop(paste("## Error: Please provide the group information for downsampling!"))
-}
-
-num_cell_per_idents=table(group)
-
-
-
-###filtering time points###
-idx=names(num_cell_per_timepoints)[which(num_cell_per_timepoints<min_cells_per_timepoints)]
-if(length(idx)>0)
-{
-for(i in idx)
-{
-data=data[,-which(stage==i)]
-if(!is.null(group))
-{
-group=group[-which(stage==i)]
-}
-stage=stage[-which(stage==i)]
-}
-}
-
-if(length(stage)==0)
-{
-stop(paste("## Error: All cells are filtered. Please provide a smaller  min_cells_per_timepoints!"))
-}
-
-###downsampling###
-#idx=names(num_cell_per_idents)[which(num_cell_per_idents>max_cells_per_ident)]
-cell_sel=c()
-for(i in unique(group))
-{
-idx=which(group==i)
-if(length(idx)>max_cells_per_ident)
-{
-cell_sel=c(cell_sel,sample(idx)[1:max_cells_per_ident])
-}else{
-cell_sel=c(cell_sel,idx)
-}
-}
-
-if(!is.null(pseudocell))
-{
-seu<-cell_aggregate(data,group,stage,size=pseudocell)
-data=as.matrix(seu@assays$RNA@data)
-group=seu@meta.data$group
-stage=seu@meta.data$stage
-}
-###filtering based on logFC###
-maxFC<-logFC_filtering(data,stage)
-idx=which(maxFC>logFC_threshold)
-if(length(idx)==0)
-{
-stop(paste("## Error: No genes left after logFC filtering!"))
-}
-
-data=data[idx,]
-maxFC=maxFC[idx]
-
-numZeroCounts=rowSums(data==0)
-gene_pct=numZeroCounts/numCell
-idx=which(gene_pct<(1-pct))
-if(length(idx)==0)
-{
-stop(paste("## Error: No gene left after filtering!"))
-}else{
-data=data[idx,]
-maxFC=maxFC[idx]
-}
-
-
-if(LMM==FALSE)
-{
-
-res<-TDEseq_lm(data,stage,z=z,verbose)
-res_dat=res$res
-p=p_aggregate(res_dat[,2:5])
-res_dat$pval=p
-res_dat$padj=p.adjust(p,method='BY')
-aic=AIC(data,stage,res)
-res_dat=cbind(res_dat,aic)
-res_dat$SignificantDE='No'
-res_dat$SignificantDE[which(res_dat$padj<threshold)]='Yes'
-shape<-reassign_shape(res_dat)
-res_dat$pattern=shape
-res_dat$logFC=maxFC
-ChangePoint<-ChangePoint_detection(res_dat,stage,res)
-if((!all(is.na(ChangePoint))))
-{
-ChangePoint<-order(unique(stage))[ChangePoint]
-ChangePoint<-stage_idx[ChangePoint]
-}
-res_dat$ChangePoint<-ChangePoint
-fits_matrix<-GetModelFits(res_dat,res,stage)
-resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix,parameters=list(LMM=FALSE,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints),NormalizeData=data[res_dat$gene,],Metadata=data.frame(Time=stage,Time_Origin=stage_origin))
-
-}else if(LMM==TRUE){
-
-
 group_numeric=as.character(group)
 cout=1
 for(i in unique(group))
@@ -238,1976 +478,37 @@ cout=cout+1
 }
 group=as.numeric(group_numeric)
 
-res<-TDEseq_lmm(data,stage,group,z=z,verbose)
-res_dat<-res$res
-p<-p_aggregate(res_dat[,2:5])
-res_dat$pval<-p
-res_dat$padj<-p.adjust(p,method='BY')
-res_dat$SignificantDE='No'
-res_dat$SignificantDE[which(res_dat$padj<threshold)]='Yes'
-bstat<-res$bstat
-res_dat$logFC=maxFC
-colnames(bstat)<-c('b.inc', 'b.dec', 'b.cov', 'b.con')
-res_dat<-cbind(res_dat,bstat)
-shape<-shape_bstat_lmm(res_dat)
-res_dat$pattern=shape
-ChangePoint<-ChangePoint_detection(res_dat,stage,res)
-if((!all(is.na(ChangePoint))))
-{
-ChangePoint<-order(unique(stage))[ChangePoint]
-ChangePoint<-stage_idx[ChangePoint]
-}
-res_dat$ChangePoint=ChangePoint
-fits_matrix<-GetModelFits(res_dat,res,stage)
-resultTDEseq<-new("TDEseq",dfTDEseqResults=res_dat,ModelFits=fits_matrix,parameters=list(LMM=FALSE,pct=pct,threshold=threshold,logFC_threshold=logFC_threshold,max_cells_per_ident=max_cells_per_ident,min_cells_per_timepoints=min_cells_per_timepoints),NormalizeData=data[res_dat$gene,],Metadata=data.frame(Time=stage,Group=group,Time_Origin=stage_origin))
-}
 
-return(resultTDEseq)
-
-}
+fit.incr<-conespline_lmm(y=data,x=stage,basis=basis[[1]],group,shape=9)
+fit.decr<-conespline_lmm(y=data,x=stage,basis=basis[[2]],group,shape=10)
+fit.conv<-conespline_lmm(y=data,x=stage,basis=basis[[3]],group,shape=11)
+fit.conc<-conespline_lmm(y=data,x=stage,basis=basis[[4]],group,shape=12)
 
 
-TDEseq_lm<-function(dat,stage,z=0,verbose=TRUE)
-{
-est.inc=matrix(0,nrow=0,ncol=length(stage))
-est.dec=matrix(0,nrow=0,ncol=length(stage))
-est.con=matrix(0,nrow=0,ncol=length(stage))
-est.cov=matrix(0,nrow=0,ncol=length(stage))
-sig_est.inc=c()
-sig_est.dec=c()
-sig_est.con=c()
-sig_est.cov=c()
-res_dat=data.frame()
-x=stage
-for(iVar in 1:nrow(dat))
-{
-  if(verbose==TRUE)
-  {
-  print(paste0('processing: ',rownames(dat)[iVar]))
-  }
-  N=ncol(dat)
-  Expr=dat[iVar,] 
-  
-  y<-Expr
- 
-  fit.incr<-conspline(y,x,type=1,knots=unique(x),test=TRUE,nsim=100,zmat=z)
-  est.inc=rbind(est.inc,as.numeric(fit.incr$muhat))
-  sig_est.inc=c(sig_est.inc,fit.incr$sighat)
- fit.decr<-conspline(y,x,type=2,knots=unique(x),test=TRUE,nsim=100,zmat=z)
-  est.dec=rbind(est.dec,as.numeric(fit.decr$muhat))
-  sig_est.dec=c(sig_est.dec,fit.decr$sighat)
- fit.conv<-conspline(y,x,type=3,knots=unique(x),test=TRUE,nsim=100,zmat=z)
-  est.cov=rbind(est.cov,as.numeric(fit.conv$muhat))
-  sig_est.cov=c(sig_est.cov,fit.conv$sighat)
- fit.conc<-conspline(y,x,type=4,knots=unique(x),test=TRUE,nsim=100,zmat=z)
-  est.con=rbind(est.con,as.numeric(fit.conc$muhat))
-  sig_est.con=c(sig_est.con,fit.conc$sighat)
 
-res<-data.frame(gene=rownames(dat)[iVar],increasing.pvalue=fit.incr$pvalx,
-decreasing.pvalue=fit.decr$pvalx,convex.pvalue=fit.conv$pvalx,concave.pvalue=fit.conc$pvalx)
-  res_dat=rbind(res_dat,res)
-}
-
-results<-list(res=res_dat,est.inc=est.inc,est.dec=est.dec,est.cov=est.cov,est.con=est.con,sig.inc=sig_est.inc,sig.dec=sig_est.dec,
-sig.con=sig_est.con,sig.cov=sig_est.cov)
+res<-data.frame(increasing.pvalue=fit.incr$pval,decreasing.pvalue=fit.decr$pval,convex.pvalue=fit.conv$pval,concave.pvalue=fit.conc$pval)
+results<-list(res=res,est.inc=fit.incr$muhat,est.dec=fit.decr$muhat,est.cov=fit.conv$muhat,est.con=fit.conc$muhat,bstat.inc=fit.incr$bstat,bstat.dec=fit.decr$bstat,
+bstat.cov=fit.conv$bstat,bstat.con=fit.conc$bstat)
 return(results)
+
+}
 }
 
 
-TDEseq_lmm<-function(data,stage,group,z=0,verbose=TRUE)
-{
-est.inc=matrix(0,nrow=0,ncol=length(stage))
-est.dec=matrix(0,nrow=0,ncol=length(stage))
-est.con=matrix(0,nrow=0,ncol=length(stage))
-est.cov=matrix(0,nrow=0,ncol=length(stage))
-sig_est.inc=c()
-sig_est.dec=c()
-sig_est.con=c()
-sig_est.cov=c()
-bstat=matrix(0,nrow=nrow(data),ncol=4)
-res_dat=data.frame()
-x=stage
-for(iVar in 1:nrow(data))
-{
-  if(verbose==TRUE)
-  {
-  print(paste0('processing: ',rownames(data)[iVar]))
-  }
-   N=ncol(data)
-  Expr=data[iVar,] 
-  
-  y<-Expr
 
-if(length(z==1))
-{
-fit.incr<-conespline_lmm(x,y,group,shape=9)
-est.inc=rbind(est.inc,as.numeric(fit.incr$muhat))
-sig_est.inc=c(sig_est.inc,fit.incr$sig2hat)
-bstat[iVar,1]=fit.incr$bstat
-fit.decr<-conespline_lmm(x,y,group,shape=10)
-est.dec=rbind(est.dec,as.numeric(fit.decr$muhat))
-sig_est.dec=c(sig_est.dec,fit.decr$sig2hat)
-bstat[iVar,2]=fit.decr$bstat
-fit.conv<-conespline_lmm(x,y,group,shape=11)
-est.cov=rbind(est.cov,as.numeric(fit.conv$muhat))
-sig_est.cov=c(sig_est.cov,fit.conv$sig2hat)
-bstat[iVar,3]=fit.conv$bstat
-fit.conc<-conespline_lmm(x,y,group,shape=12)
-est.con=rbind(est.con,as.numeric(fit.conc$muhat))
-sig_est.con=c(sig_est.con,fit.conc$sig2hat)
-bstat[iVar,4]=fit.conc$bstat
-}else{
-fit.incr<-conespline_lmm_cov(x,y,z=z,group,shape=9)
-est.inc=rbind(est.inc,as.numeric(fit.incr$muhat))
-sig_est.inc=c(sig_est.inc,fit.incr$sig2hat)
-bstat[iVar,1]=fit.incr$bstat
-fit.decr<-conespline_lmm_cov(x,y,z=z,group,shape=10)
-est.dec=rbind(est.dec,as.numeric(fit.decr$muhat))
-sig_est.dec=c(sig_est.dec,fit.decr$sig2hat)
-bstat[iVar,2]=fit.decr$bstat
-fit.conv<-conespline_lmm_cov(x,y,z=z,group,shape=11)
-est.cov=rbind(est.cov,as.numeric(fit.conv$muhat))
-sig_est.cov=c(sig_est.cov,fit.conv$sig2hat)
-bstat[iVar,3]=fit.conv$bstat
-fit.conc<-conespline_lmm_cov(x,y,z=z,group,shape=12)
-est.con=rbind(est.con,as.numeric(fit.conc$muhat))
-sig_est.con=c(sig_est.con,fit.conc$sig2hat)
-bstat[iVar,4]=fit.conc$bstat
-}
-res<-data.frame(gene=rownames(data)[iVar],increasing.pvalue=fit.incr$pval,
-decreasing.pvalue=fit.decr$pval,convex.pvalue=fit.conv$pval,concave.pvalue=fit.conc$pval)
-res_dat=rbind(res_dat,res)
 
-}
-results<-list(res=res_dat,est.inc=est.inc,est.dec=est.dec,est.cov=est.cov,est.con=est.con,sig.inc=sig_est.inc,sig.dec=sig_est.dec,
-sig.con=sig_est.con,sig.cov=sig_est.cov,bstat=bstat)
-return(results)
-}
 
-p_aggregate<-function(pm)
-{
-pm=as.matrix(pm)
-pm[which(pm<0)]=0
-idx=which(is.na(pm[,1]))
-if(length(idx)>0)
-{
-pvalues=pm[-idx,]
-}else{
-pvalues=pm
-}
-res <- setNames(split(pvalues, seq(nrow(pvalues))), rownames(pvalues))
-combined_pvalue <- unlist(lapply(res, ComputeACAT))
-}
 
 
-ComputeACAT <- function(Pvals, Weights=NULL){
- #### check if there is NA
- if(sum(is.na(Pvals)) > 0){
-  stop("Cannot have NAs in the p-values!")
- }## end fi
- 
- #### check if Pvals are between 0 and 1
- if((sum(Pvals<0) + sum(Pvals>1)) > 0){
-  stop("P-values must be between 0 and 1!")
- }## end fi
- 
- #### check if there are pvals that are either exactly 0 or 1.
- is.zero <- (sum(Pvals==0) >= 1)
- is.one <- (sum(Pvals==1) >= 1)
- 
- #if(is.zero && is.one){stop("Cannot have both 0 and 1 p-values!")}## end fi
- if(is.zero && is.one){return(NA)}## end fi
- 
- if(is.zero){return(1e-300)}## end fi
 
- if(is.one){
-  ##warning("There are p-values that are exactly 1!")
-  return(0.9999)
- }## end fi
 
- #### Default: equal weights. If not, check the validity of the user supplied weights and standadize them.
- if(is.null(Weights)){
-  Weights <- rep(1/length(Pvals), length(Pvals))
- }else if (length(Weights) != length(Pvals)){
-  stop("The length of weights should be the same as that of the p-values")
- }else if (sum(Weights<0) > 0){
-  stop("All the weights must be positive!")
- }else{
-  Weights <- Weights/sum(Weights)
- }## end fi
 
 
- #### check if there are very small non-zero p values
- is.small <- (Pvals < 1e-16)
- if(sum(is.small) == 0){
-  cct.stat <- sum(Weights*tan((0.5 - Pvals)*pi))
- }else{
-  cct.stat <- sum((Weights[is.small]/Pvals[is.small])/pi)
-  cct.stat <- cct.stat + sum(Weights[!is.small]*tan((0.5 - Pvals[!is.small])*pi))
- }## end fi
 
- #### check if the test statistic is very large.
- if(cct.stat > 1e+15){
-  pval <- (1/cct.stat)/pi
- }else{
-  pval <- 1 - pcauchy(cct.stat)
- }## end fi
- return(pval)
-}## end func
 
-###################LM function###############################
 
-dmvnorm<-function(y,mu,sigma)
-{
-f<-sum(dnorm(y,mu,sqrt(sigma),log=TRUE))
-return(f)
-}
 
-reassign_shape<-function(res_dat)
-{
-shape=rep(NA,nrow(res_dat))
-shape_ind=c("Growth","Recession","Trough","Peak")
-idx=match(c("aic.inc","aic.dec","aic.cov","aic.con"),colnames(res_dat))
-aic=res_dat[,idx]
-for(i in 1:nrow(res_dat))
-{
-aic_tmp=aic[i,]
-idx=which(aic_tmp==min(aic_tmp))[1]
-shape[i]=shape_ind[idx]
-}
-return(shape)
-}
 
-AIC<-function(dat,time,res)
-{
-aic=matrix(NA,nrow=nrow(dat),ncol=4)
-k=length(unique(time))
-n=length(time)
-for(i in 1:nrow(dat))
-{
-f=dat[i,]
-loglik<-dmvnorm(f,res$est.inc[i,],res$sig.inc[i])
-aic[i,1]=2*(k+1)-2*loglik
-loglik<-dmvnorm(f,res$est.dec[i,],res$sig.dec[i])
-aic[i,2]=2*(k+1)-2*loglik
-loglik<-dmvnorm(f,res$est.cov[i,],res$sig.cov[i])
-aic[i,3]=2*(k+2)-2*loglik
-loglik<-dmvnorm(f,res$est.con[i,],res$sig.con[i])
-aic[i,4]=2*(k+2)-2*loglik
-}
-colnames(aic)=c('aic.inc','aic.dec','aic.cov','aic.con')
-return(aic)
-}
-
-ChangePoint_detection<-function(res_dat,time,res)
-{
-N=nrow(res_dat)
-ChangePoint=rep(NA,N)
-shape=res_dat$pattern
-for(i in 1:N)
-{
-if(shape[i]=='Trough')
-{
-f=res$est.cov[i,]
-est_t=c()
-for(j in unique(time))
-{
-est_t=c(est_t,mean(f[which(time==j)]))
-}
-set_dif<-diff(est_t)
-pos=which(set_dif>0)[1]
-ChangePoint[i]=pos
-if(sum(sign(set_dif))== -(length(time)-1))
-{
-ChangePoint[i]=length(unique(time))
-}
-}else if(shape[i]=='Peak'){
-f=res$est.con[i,]
-est_t=c()
-for(j in unique(time))
-{
-est_t=c(est_t,mean(f[which(time==j)]))
-}
-set_dif<-diff(est_t)
-pos=which(set_dif<0)[1]
-ChangePoint[i]=pos
-if(sum(sign(set_dif))== (length(time)-1))
-{
-ChangePoint[i]=length(unique(time))
-}
-}
-}
-return(ChangePoint)
-}
-############LM function ########################
-conspline<-function (y, x, type, zmat = 0, wt = 0, knots = 0, test = FALSE, 
-    c = 1.2, nsim = 10000) 
-{
-    n = length(y)
-    if (c > 2) {
-        c = 2
-    }
-    if (c < 1) {
-        c = 1
-    }
-    if (n < 10) {
-        print("ERROR: must have at least 10 observations")
-    }
-    if (length(wt) > 1 & min(wt) <= 0) {
-        print("ERROR: must have positive weights")
-    }
-    one = 1:n * 0 + 1
-    if (length(x) != length(y)) {
-        print("ERROR: length of x must be length of y")
-    }
-    if (length(zmat) > 1) {
-        if (length(zmat) == n) {
-            zmat = matrix(zmat, ncol = 1)
-        }
-        if (dim(zmat)[1] != n) {
-            print("ERROR: number of rows of zmat must be length of y")
-        }
-        k = dim(zmat)[2]
-        rone = one - zmat %*% solve(t(zmat) %*% zmat) %*% t(zmat) %*% 
-            one
-        if (sum(rone^2) > 1e-08) {
-            zmat = cbind(one, zmat)
-            k = k + 1
-        }
-    }else {
-        zmat = matrix(one, ncol = 1)
-        k = 1
-    }
-    add = 3
-    if (type > 2) {
-        add = 4
-    }
-    if (length(knots) > 1) {
-        if (min(knots) <= min(x) & max(knots) >= max(x)) {
-            t = knots
-        }else {
-            br = c(10, 25, 100, 200, 400, 1000, 1e+10)
-            obs = 1:7
-            nk = min(obs[n <= br]) + add
-            t = 0:(nk - 1)/(nk - 1) * (max(x) - min(x)) + min(x)
-        }
-    }else {
-        br = c(10, 25, 100, 200, 400, 1000, 1e+10)
-        obs = 1:7
-        nk = min(obs[n <= br]) + add
-        t = 0:(nk - 1)/(nk - 1) * (max(x) - min(x)) + min(x)
-    }
-    if (type == 1) {
-        bas = monincr.lm(x, t)
-        delta = bas$sigma
-        slopes = bas$dsigma
-    }
-    if (type == 2) {
-        bas = monincr.lm(x, t)
-        delta = 1 - bas$sigma
-        slopes = -bas$dsigma
-    }
-    if (type == 3) {
-        bas = convex.lm(x, t)
-        delta = bas$sigma
-        slopes = bas$dsigma
-    }
-    if (type == 4) {
-        bas = concave.lm(x, t)
-        delta = bas$sigma
-        slopes = bas$dsigma
-    }
-    if (type == 5) {
-        bas = convex.lm(x, t)
-        delta = bas$sigma
-        slopes = bas$dsigma
-    }
-    if (type == 6) {
-        bas = concave.lm(x, t)
-        delta = 1 - bas$sigma
-        slopes = -bas$dsigma
-    }
-    if (type == 7) {
-        bas = concave.lm(x, t)
-        delta = bas$sigma
-        slopes = bas$dsigma
-    }
-    if (type == 8) {
-        bas = convex.lm(x, t)
-        delta = 1 - bas$sigma
-        slopes = -bas$dsigma
-    }
-    incr = 0
-    decr = 0
-    if (type == 1 | type == 5 | type == 7) {
-        incr = 1
-    }
-    if (type == 2 | type == 6 | type == 8) {
-        decr = 1
-    }
-    m = length(delta)/n
-    if (incr == 0 & decr == 0) {
-        zmat = cbind(zmat, x)
-    }
-    if (length(wt) > 1) {
-        ytr = y * sqrt(wt)
-        dtr = delta
-        ztr = zmat
-        for (i in 1:n) {
-            dtr[, i] = delta[, i] * sqrt(wt[i])
-            ztr[i, ] = zmat[i, ] * sqrt(wt[i])
-        }
-    }else {
-        ztr = zmat
-        dtr = delta
-        ytr = y
-    }
-    ans = coneB(ytr, t(dtr), ztr)
-    dfuse = min(c * ans$df, m + k)
-    sighat = sum((ytr - ans$yhat)^2)/(n - dfuse)
-    if (k > 1) {
-        use = abs(ans$coef) > 1e-08
-        if (k > 1) {
-            use[2:k] = FALSE
-        }
-        xj = cbind(ztr, t(dtr))
-        xj = xj[, use]
-        pj = xj %*% solve(t(xj) %*% xj) %*% t(xj)
-        zm = ztr[, 2:k]
-        ppinv = solve(t(zm) %*% (diag(one) - pj) %*% zm)
-        zcoef = ans$coef[2:k]
-        sez = sqrt(diag(ppinv) * sighat)
-        tz = zcoef/sez
-        pz = 2 * (1 - pt(abs(tz), n - dfuse))
-    }
-    if (length(wt) > 1) {
-        muhat = ans$yhat/sqrt(wt)
-    }
-    else {
-        muhat = ans$yhat
-    }
-    if (test) {
-        th0 = ztr %*% solve(t(ztr) %*% ztr) %*% (t(ztr)%*%ytr)  ###will be more efficient for large scale data set
-        sse0 = sum((ytr - th0)^2)
-        sse1 = sum((ytr - ans$yhat)^2)
-        bstat = (sse0 - sse1)/sse0
-        mdist = 1:(m + 1) * 0
-        k0 = dim(zmat)[2]
-        for (isim in 1:nsim) {
-            ysim = rnorm(n)
-            asim = coneB(ysim, t(dtr), ztr)
-            df0 = asim$df - k0
-            mdist[df0 + 1] = mdist[df0 + 1] + 1
-        }
-        mdist = mdist/nsim
-        ps = mdist[1]
-        for (d in 1:m) {
-            ps = ps + pbeta(bstat, d/2, (n - d - k0)/2) * mdist[d + 
-                1]
-        }
-        pval = 1 - ps
-    }
-    if (incr == 0 & decr == 0) {
-        fhat = t(delta) %*% ans$coef[(k + 2):(k + 1 + m)]
-        fhat = fhat + x * ans$coef[k + 1]
-        fhat = fhat + ans$coef[1]
-        fslope = t(slopes) %*% ans$coef[(k + 2):(k + 1 + m)]
-        fslope = fslope + ans$coef[k + 1]
-    }
-    else {
-        fhat = t(delta) %*% ans$coef[(k + 1):(k + m)]
-        fhat = fhat + ans$coef[1]
-        fslope = t(slopes) %*% ans$coef[(k + 1):(k + m)]
-    }
-    cans = new.env()
-    cans$sighat = sighat
-    if (k > 1) {
-        cans$zhmat = ppinv
-        cans$zcoef = zcoef
-        cans$sez = sqrt(sez)
-        cans$pvalz = pz
-    }
-    if (test) {
-        cans$pvalx = pval
-    }
-    cans$muhat = muhat
-    cans$fhat = fhat
-    cans$fslope = fslope
-    cans$knots = t
-    cans$df = dfuse
-    wp1 = sum(ytr * ztr[, 1])/sum(ztr[, 1]^2) * ztr[, 1]
-    cans$rsq = 1 - sum((ytr - ans$yhat)^2)/sum((ytr - wp1)^2)
-    cans
-}
-
-
-convex.lm <-function(x,t){
-	n=length(x)
-	k=length(t)-2
-	m=k+2
-	sigma=matrix(1:m*n,nrow=m,ncol=n)
-	dsigma=matrix(1:m*n,nrow=m,ncol=n)
-	for(j in 1:(k-1)){
-		i1=x<=t[j]
-		sigma[j,i1] = 0
-		dsigma[j,i1] = 0
-	 	i2=x>t[j]&x<=t[j+1]
-	 	sigma[j,i2] = (x[i2]-t[j])^3 / (t[j+2]-t[j]) / (t[j+1]-t[j])/3
-	 	dsigma[j,i2] = 3*(x[i2]-t[j])^2 / (t[j+2]-t[j]) / (t[j+1]-t[j])/3
-	    i3=x>t[j+1]&x<=t[j+2]
-	    sigma[j,i3] = x[i3]-t[j+1]-(x[i3]-t[j+2])^3/(t[j+2]-t[j])/(t[j+2]-t[j+1])/3+(t[j+1]-t[j])^2/3/(t[j+2]-t[j])-(t[j+2]-t[j+1])^2/3/(t[j+2]-t[j])
-	    dsigma[j,i3] = 1-3*(x[i3]-t[j+2])^2/(t[j+2]-t[j])/(t[j+2]-t[j+1])/3
-	    i4=x>t[j+2]
-	    sigma[j,i4]=(x[i4]-t[j+1])+(t[j+1]-t[j])^2/3/(t[j+2]-t[j])-(t[j+2]-t[j+1])^2/3/(t[j+2]-t[j])
-	    dsigma[j,i4]=1
-	}
-	i1=x<=t[k]
-	sigma[k,i1] = 0
-	dsigma[k,i1] = 0
-	i2=x>t[k]&x<=t[k+1]
-	sigma[k,i2] = (x[i2]-t[k])^3 / (t[k+2]-t[k]) / (t[k+1]-t[k])/3
-	dsigma[k,i2] = 3*(x[i2]-t[k])^2 / (t[k+2]-t[k]) / (t[k+1]-t[k])/3
-	i3=x>t[k+1]
-	sigma[k,i3] = x[i3]-t[k+1]-(x[i3]-t[k+2])^3/(t[k+2]-t[k])/(t[k+2]-t[k+1])/3+(t[k+1]-t[k])^2/3/(t[k+2]-t[k])-(t[k+2]-t[k+1])^2/3/(t[k+2]-t[k])
-	dsigma[k,i3] = 1-3*(x[i3]-t[k+2])^2/(t[k+2]-t[k])/(t[k+2]-t[k+1])/3
-	i1=x<=t[2]
-	sigma[k+1,i1]=x[i1]-t[1]+(t[2]-x[i1])^3/(t[2]-t[1])^2/3-(t[2]-t[1])^3/(t[2]-t[1])^2/3
-	dsigma[k+1,i1]=1-3*(t[2]-x[i1])^2/(t[2]-t[1])^2/3
-	i2=x>t[2]
-	sigma[k+1,i2]=x[i2]-t[1]-(t[2]-t[1])^3/(t[2]-t[1])^2/3
-	dsigma[k+1,i2]=1
-	i1=x<=t[k+1]
-	sigma[k+2,i1]=0
-	dsigma[k+2,i1]=0
-	i2=x>t[k+1]
-	sigma[k+2,i2]=(x[i2]-t[k+1])^3/(t[k+2]-t[k+1])^2/3
-	dsigma[k+2,i2]=3*(x[i2]-t[k+1])^2/(t[k+2]-t[k+1])^2/3
-	
-	for(i in 1:m){
-		rng=max(sigma[i,])
-		sigma[i,]=sigma[i,]/rng
-		dsigma[i,]=dsigma[i,]/rng
-	}
-	
-	ans=new.env()
-	ans$sigma=sigma
-	ans$dsigma=dsigma
-	ans
-}
-
-concave.lm <-function(x,t){
-	n=length(x)
-	k=length(t)-2
-	m=k+2
-	sigma=matrix(1:m*n,nrow=m,ncol=n)
-	dsigma=matrix(1:m*n,nrow=m,ncol=n)
-	for(j in 1:(k-1)){
-		i1=x<=t[j]
-		sigma[j,i1] = 0
-		dsigma[j,i1] = 0
-	 	i2=x>t[j]&x<=t[j+1]
-	 	sigma[j,i2] = (x[i2]-t[j])^3 / (t[j+2]-t[j]) / (t[j+1]-t[j])/3
-	 	dsigma[j,i2] = 3*(x[i2]-t[j])^2 / (t[j+2]-t[j]) / (t[j+1]-t[j])/3
-	    i3=x>t[j+1]&x<=t[j+2]
-	    sigma[j,i3] = x[i3]-t[j+1]-(x[i3]-t[j+2])^3/(t[j+2]-t[j])/(t[j+2]-t[j+1])/3+(t[j+1]-t[j])^2/3/(t[j+2]-t[j])-(t[j+2]-t[j+1])^2/3/(t[j+2]-t[j])
-	    dsigma[j,i3] = 1-3*(x[i3]-t[j+2])^2/(t[j+2]-t[j])/(t[j+2]-t[j+1])/3
-	    i4=x>t[j+2]
-	    sigma[j,i4]=(x[i4]-t[j+1])+(t[j+1]-t[j])^2/3/(t[j+2]-t[j])-(t[j+2]-t[j+1])^2/3/(t[j+2]-t[j])
-	    dsigma[j,i4]=1
-	}
-	i1=x<=t[k]
-	sigma[k,i1] = 0
-	dsigma[k,i1] = 0
-	i2=x>t[k]&x<=t[k+1]
-	sigma[k,i2] = (x[i2]-t[k])^3 / (t[k+2]-t[k]) / (t[k+1]-t[k])/3
-	dsigma[k,i2] = 3*(x[i2]-t[k])^2 / (t[k+2]-t[k]) / (t[k+1]-t[k])/3
-	i3=x>t[k+1]
-	sigma[k,i3] = x[i3]-t[k+1]-(x[i3]-t[k+2])^3/(t[k+2]-t[k])/(t[k+2]-t[k+1])/3+(t[k+1]-t[k])^2/3/(t[k+2]-t[k])-(t[k+2]-t[k+1])^2/3/(t[k+2]-t[k])
-	dsigma[k,i3] = 1-3*(x[i3]-t[k+2])^2/(t[k+2]-t[k])/(t[k+2]-t[k+1])/3
-	i1=x<=t[2]
-	sigma[k+1,i1]=x[i1]-t[1]+(t[2]-x[i1])^3/(t[2]-t[1])^2/3
-	dsigma[k+1,i1]=1-3*(t[2]-x[i1])^2/(t[2]-t[1])^2/3
-	i2=x>t[2]
-	sigma[k+1,i2]=x[i2]-t[1]
-	dsigma[k+1,i2]=1
-	i1=x<=t[k+1]
-	sigma[k+2,i1]=0
-	dsigma[k+2,i1]=0
-	i2=x>t[k+1]
-	sigma[k+2,i2]=(x[i2]-t[k+1])^3/(t[k+2]-t[k+1])^2/3
-	dsigma[k+2,i2]=3*(x[i2]-t[k+1])^2/(t[k+2]-t[k+1])^2/3
-	
-	for(i in 1:m){
-		sigma[i,]=max(dsigma[i,])*x-sigma[i,]
-		dsigma[i,]=max(dsigma[i,])-dsigma[i,]
-	}
-	for(i in 1:m){
-		rng=max(sigma[i,])
-		sigma[i,]=sigma[i,]/rng
-		dsigma[i,]=dsigma[i,]/rng
-	}
-	
-	
-	ans=new.env()
-	ans$sigma=sigma
-	ans$dsigma=dsigma
-	ans
-}
-
-monincr.lm <-function(x,t){
-	n=length(x)
-	k=length(t)-2
-	m=k+2
-	sigma=matrix(1:m*n,nrow=m,ncol=n)
-	dsigma=sigma
-	for(j in 1:(k-1)){
-	 	i1=x<=t[j]
-	 	sigma[j,i1] = 0
-	 	dsigma[j,i1] = 0
-	 	i2=x>t[j]&x<=t[j+1]
-		sigma[j,i2] = (x[i2]-t[j])^2 / (t[j+2]-t[j]) / (t[j+1]-t[j])
-		dsigma[j,i2] = 2*(x[i2]-t[j]) / (t[j+2]-t[j]) / (t[j+1]-t[j])
-	    i3=x>t[j+1]&x<=t[j+2]
-		sigma[j,i3] = 1-(x[i3]-t[j+2])^2/(t[j+2]-t[j+1])/(t[j+2]-t[j])
-		dsigma[j,i3] = -2*(x[i3]-t[j+2])/(t[j+2]-t[j+1])/(t[j+2]-t[j])
-	    i4=x>t[j+2]
-		sigma[j,i4]=1
-		dsigma[j,i4]=0
-	}
-	
-	i1=x<=t[k]
-	sigma[k,i1] = 0
-	dsigma[k,i1] = 0
-	i2=x>t[k]&x<=t[k+1]
-	sigma[k,i2] = (x[i2]-t[k])^2 / (t[k+2]-t[k]) / (t[k+1]-t[k])
-	dsigma[k,i2] = 2*(x[i2]-t[k]) / (t[k+2]-t[k]) / (t[k+1]-t[k])
-	i3=x>t[k+1]&x<=t[k+2]
-	sigma[k,i3] = 1- (x[i3]-t[k+2])^2/(t[k+2]-t[k+1])/(t[k+2]-t[k])
-	dsigma[k,i3] = -2*(x[i3]-t[k+2])/(t[k+2]-t[k+1])/(t[k+2]-t[k])
-	i4=x>t[k+2]
-	sigma[k,i4]=1
-	dsigma[k,i4]=0
-	
-	i1=x<=t[2]
-	sigma[k+1,i1]=1-(t[2]-x[i1])^2/(t[2]-t[1])^2
-	dsigma[k+1,i1]=2*(t[2]-x[i1])/(t[2]-t[1])^2
-	i2=x>t[2]
-	sigma[k+1,i2]=1
-	dsigma[k+1,i2]=0
-	
-	i1=x<=t[k+1]
-	sigma[k+2,i1]=0
-	dsigma[k+2,i1]=0
-	i2=x>t[k+1]&x<=t[k+2]
-	sigma[k+2,i2]=(x[i2]-t[k+1])^2/(t[k+2]-t[k+1])^2
-	dsigma[k+2,i2]=2*(x[i2]-t[k+1])/(t[k+2]-t[k+1])^2
-	i3=x>t[k+2]
-	sigma[k+2,i3]=1
-	dsigma[k+2,i3]=0
-	for(i in 1:m){
-		rng=max(sigma[i,])
-		sigma[i,]=sigma[i,]/rng
-		dsigma[i,]=dsigma[i,]/rng
-	}
-	
-	ans=new.env()
-	ans$sigma=sigma
-	ans$dsigma=dsigma
-	ans
-}
-
-############LMM function########################
-conespline_lmm<-function(x,y,group,shape=9,test=TRUE,nsim=100)
-{ ## adjust
-xmat=as.matrix(x)
-n = length(y)
-id=group
-    szs = unname(table(id)) ### numbers of individuals in each group
-    #print (id)
-    ncl = length(szs) ###numbers of groups
-	balanced = FALSE
-	ycl = f_ecl(y, ncl, szs)  #observations for each group
-	sm = 1e-7 
-	capl = length(xmat) / n  ##numbers of predictors
-	delta = NULL
-	varlist = NULL
-	xid1 = NULL; xid2 = NULL; xpos2 = 0  ##position of nonlinear term
-	knotsuse = list(); numknotsuse = NULL
-	mslst = list()
-#new:
-    knots=list()
-	capm = 0
-	capms = 0
-	numknots=0
-	knots[[1]]=0
-	space="E"
-	shapes=shape
-	    del1_ans = makedelta(xmat[, 1], shape, numknots[1], knots[[1]], space = space[1])
-		del1 = del1_ans$amat
-		knotsuse[[1]] = del1_ans$knots 
-		mslst[[1]] = del1_ans$ms
-		numknotsuse = c(numknotsuse, length(del1_ans$knots))
-        m1 = length(del1) / n
-        var1 = 1:m1*0 + 1
-		xpos1 = xpos2 + 1
-		xpos2 = xpos2 + m1
-		xid1 = c(xid1, xpos1)
-		xid2 = c(xid2, xpos2)
-		delta = del1
-        varlist = var1
-		
-		 xvec = NULL
-		 
-if(shape==9 | shape==10)
-{
-bigmat = rbind(1:n*0 + 1, delta)
-np = 1 + capms
-}else{
-bigmat <- rbind(1:n*0 + 1, t(xmat[, shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13]), delta)
-np <- 1 + sum(shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13) + capms
-}
-capm <- length(delta) / n - capms
-		
-		#new: capm is the number of columns of edges for constrained x's
-		capm = length(delta) / n - capms
-		
-		zvec = y
-        gmat = t(bigmat)
-		
-	dsend = gmat[, (np + 1):(np + capm), drop = FALSE]
-        zsend = gmat[, 1:np, drop = FALSE]
-		 ans = coneB(zvec, dsend, zsend)
-            edf = ans$df
-            face = ans$face
-            bh = coef(ans)
-			    if (any(round(bh[1:np],6) < 0)) {
-                pos = (1:np)[which(round(bh[1:np],6) < 0)]
-                face = unique(c(pos, face))
-            }
-			
-        dd = t(bigmat[face, ,drop = FALSE])
-		
-		xms = ones = list()
-        st = 1
-        ed = 0
-		
-		for (icl in 1:ncl) {
-            sz = szs[icl]
-            ed = ed + sz
-            xms[[icl]] = dd[st:ed, ,drop=F]
-            onevec = 1:sz*0+1
-            onemat = onevec%*%t(onevec)
-            ones[[icl]] = onemat
-            st = ed + 1
-        }
-		
-		muhat = t(bigmat) %*% bh
-		oldmu = muhat
-#########update mu and sigma iterately##########		
-		diff = 10
-		nrep = 0
-		while (diff > 1e-7 & nrep < 10) {
-		
-		nrep = nrep + 1
-		evec = y - muhat    ##residuals a+e
-		ecl = f_ecl(evec, ncl, szs)  ## residuals by group
-        mod.lmer = NULL
-		###estimate variance of a by lmer package### 
-	#	mod.lmer = lmer(evec~-1+(1|id), REML=reml)
-    #    thhat = summary(mod.lmer)$optinfo$val^2
-		###estimate variance by grid search###
-		ansi = try(ansi0<-uniroot(fth2rm, c(1e-10, 1e+3), szs=szs, ycl=ecl, N=n, xcl=xms, p=edf, type='ub', xtx=xtx, xtx2=xtx2, xmat_face=dd, ones=ones), silent=TRUE)
-        if (class(ansi) == "try-error") {
-            thhat = 0
-        } else {
-            thhat = ansi$root
-        }
-		
-		type = "ub"
-############update mu gaven a ############		
-	ytil = NULL 
-#gtil is edges
-			gtil = NULL
-			st = 1
-			ed = 0
-			sz = max(szs)
-            pos = which(szs == sz)[1]
-            oneMat = ones[[pos]]
-			vi = diag(sz) + oneMat*thhat  ##covariance matrix
-            covi = vi
-            umat = t(chol(covi))
-            uinv = solve(umat)
-            #uinv0 is used for unbalanced
-            uinv0 = uinv
-			######L^-1*y=L^-1*(mu+xb)+e  e~N(0,I) #########
-			for (icl in 1:ncl) {
-				sz = szs[icl]
-                uinv = uinv0[1:sz, 1:sz, drop=FALSE]
-				yi = ycl[[icl]]
-				ytil = c(ytil, uinv %*% as.matrix(yi, ncol=1))
-				ed = ed + sz
-				gtil = rbind(gtil, uinv %*% gmat[st:ed, ,drop=F])
-				st = ed + 1
-			}
-			#####weighted coneB #########
-			dsend = gtil[, (np + 1):(np + capm), drop = FALSE]
-            zsend = gtil[, 1:np, drop = FALSE]
-            ans = coneB(ytil, dsend, vmat = zsend, face=face)
-            edf = ans$df
-            face = ans$face
-            bh = coef(ans)
-			    if (any(round(bh[1:np],6) < 0)) {
-                pos = (1:np)[which(round(bh[1:np],6) < 0)]
-                face = unique(c(pos, face))
-                }
-			muhat = t(bigmat) %*% bh
-			diff = mean((oldmu - muhat)^2)
-			oldmu = muhat
-            dd = t(bigmat[face, ,drop = FALSE])
-            dd2 = gtil[,face,drop=FALSE]
-                xms = list()
-                st = 1
-                ed = 0
-                for (icl in 1:ncl) {
-                    sz = szs[icl]
-                    ed = ed + sz
-                    xms[[icl]] = dd[st:ed, ,drop=F]
-                    st = ed + 1
-                }
-			}
-		ebars = sapply(ecl, mean)
-		sig2hat = fsig(thhat, szs, ecl, ncl, N=n, edf=edf, D=nrow(bigmat), type=type)
-		siga2hat = sig2hat * thhat 
-		ahat = ebars*szs*thhat/(1+szs*thhat)
-	#################testing####################
-	if(test)
-	{
-	        ytil=NULL
-	        gtil = NULL
-			st = 1
-			ed = 0
-			sz = max(szs)
-            pos = which(szs == sz)[1]
-            oneMat = ones[[pos]]
-			vi = diag(sz) + oneMat*thhat  ##covariance matrix
-            covi = vi
-            umat = t(chol(covi))
-            uinv = solve(umat)
-            #uinv0 is used for unbalanced
-            uinv0 = uinv
-			######L^-1*y=L^-1*(mu+xb)+e  e~N(0,I) #########
-			for (icl in 1:ncl) {
-				sz = szs[icl]
-                uinv = uinv0[1:sz, 1:sz, drop=FALSE]
-				yi = ycl[[icl]]
-				ytil = c(ytil, uinv %*% as.matrix(yi, ncol=1))
-				ed = ed + sz
-				gtil = rbind(gtil, uinv %*% gmat[st:ed, ,drop=F])
-				st = ed + 1
-			}
-			#####weighted coneB #########
-			dsend = gtil[, (np + 1):(np + capm), drop = FALSE]
-            zsend = gtil[, 1:np, drop = FALSE]
-			
-			yhat=gtil%*%bh                                                    #34.20664
-            th0 = zsend %*% solve(t(zsend) %*% zsend) %*% (t(zsend)%*%ytil)
-			sse0=sum((ytil-th0)^2)
-			sse1=sum((ytil-yhat)^2)
-		bstat=(sse0-sse1)/sse0
-		m=ncol(gtil)
-		mdist=1:(m+1)*0
-		k0=dim(zsend)[2]
-		for(isim in 1:nsim){
-			ysim=rnorm(n)
-			asim=coneB(ysim,dsend,zsend)
-			df0=asim$df-k0
-			mdist[df0+1]=mdist[df0+1]+1
-		}
-		mdist=mdist/nsim
-		ps=mdist[1]
-		for(d in 1:m){
-			ps=ps+pbeta(bstat,d/2,(n-d-k0)/2)*mdist[d+1]
-		}
-		pval=1-ps
-    }
-	rslt = list(muhat = muhat,  bh = bh,ahat = ahat, sig2hat = sig2hat, siga2hat = siga2hat, thhat = thhat, bigmat = bigmat,pval=pval,bstat=bstat)
-    return (rslt)
-}
-
-conespline_lmm_cov<-function(x,y,z,group,shape=9,test=TRUE,nsim=100)
-{ ## adjust
-xmat=as.matrix(x)
-n = length(y)
-zmat=as.matrix(z)
-id=group
-    szs = unname(table(id)) ### numbers of individuals in each group
-    #print (id)
-    ncl = length(szs) ###numbers of groups
-	balanced = FALSE
-	ycl = f_ecl(y, ncl, szs)  #observations for each group
-	sm = 1e-7 
-	capl = length(xmat) / n  ##numbers of predictors
-	capk = length(zmat) / n  ##numbers of covariates
-	delta = NULL
-	varlist = NULL
-	xid1 = NULL; xid2 = NULL; xpos2 = 0  ##position of nonlinear term
-	knotsuse = list(); numknotsuse = NULL
-	mslst = list()
-#new:
-    knots=list()
-	capm = 0
-	capms = 0
-	numknots=0
-	knots[[1]]=0
-	space="E"
-	shapes=shape
-	    del1_ans = makedelta(xmat[, 1], shape, numknots[1], knots[[1]], space = space[1])
-		del1 = del1_ans$amat
-		knotsuse[[1]] = del1_ans$knots 
-		mslst[[1]] = del1_ans$ms
-		numknotsuse = c(numknotsuse, length(del1_ans$knots))
-        m1 = length(del1) / n   ####number of nonlinear terms
-        var1 = 1:m1*0 + 1
-		xpos1 = xpos2 + 1
-		xpos2 = xpos2 + m1
-		xid1 = c(xid1, xpos1)
-		xid2 = c(xid2, xpos2)
-		delta = del1
-        varlist = var1
-		
-		 xvec = NULL
-		 
-if(shape==9 | shape==10)
-{
-# bigmat = rbind(1:n*0 + 1, delta)
-# np = 1 + capms
-bigmat = rbind(1:n*0 + 1, t(zmat), delta)
-np = 1 + capk + capms
-}else{
-# bigmat <- rbind(1:n*0 + 1, t(xmat[, shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13]), delta)
-# np <- 1 + sum(shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13) + capms
-xvec = t(xmat[, shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13])
-bigmat = rbind(1:n*0 + 1, t(zmat), xvec, delta)
-np = 1 + capk + sum(shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13)  + capms
-}
-
-		
-		#new: capm is the number of columns of edges for constrained x's
-		capm = length(delta) / n - capms
-		
-		zvec = y
-        gmat = t(bigmat)
-		
-	dsend = gmat[, (np + 1):(np + capm), drop = FALSE]
-        zsend = gmat[, 1:np, drop = FALSE]
-		 ans = coneB(zvec, dsend, zsend)
-            edf = ans$df
-            face = ans$face
-            bh = coef(ans)
-			    if (any(round(bh[1:np],6) < 0)) {
-                pos = (1:np)[which(round(bh[1:np],6) < 0)]
-                face = unique(c(pos, face))
-            }
-			
-        dd = t(bigmat[face, ,drop = FALSE])
-		
-		xms = ones = list()
-        st = 1
-        ed = 0
-		
-		for (icl in 1:ncl) {
-            sz = szs[icl]
-            ed = ed + sz
-            xms[[icl]] = dd[st:ed, ,drop=F]
-            onevec = 1:sz*0+1
-            onemat = onevec%*%t(onevec)
-            ones[[icl]] = onemat
-            st = ed + 1
-        }
-		
-		muhat = t(bigmat) %*% bh
-		oldmu = muhat
-#########update mu and sigma iterately##########		
-		diff = 10
-		nrep = 0
-		while (diff > 1e-7 & nrep < 10) {
-		
-		nrep = nrep + 1
-		evec = y - muhat    ##residuals a+e
-		ecl = f_ecl(evec, ncl, szs)  ## residuals by group
-        mod.lmer = NULL
-		###estimate variance of a by lmer package### 
-	#	mod.lmer = lmer(evec~-1+(1|id), REML=reml)
-    #    thhat = summary(mod.lmer)$optinfo$val^2
-		###estimate variance by grid search###
-		ansi = try(ansi0<-uniroot(fth2rm, c(1e-10, 1e+3), szs=szs, ycl=ecl, N=n, xcl=xms, p=edf, type='ub', xtx=xtx, xtx2=xtx2, xmat_face=dd, ones=ones), silent=TRUE)
-        if (class(ansi) == "try-error") {
-            thhat = 0
-        } else {
-            thhat = ansi$root
-        }
-		
-		type = "ub"
-############update mu gaven a ############		
-	        ytil = NULL 
-            #gtil is edges
-			gtil = NULL
-			st = 1
-			ed = 0
-			sz = max(szs)
-            pos = which(szs == sz)[1]
-            oneMat = ones[[pos]]
-			vi = diag(sz) + oneMat*thhat  ##covariance matrix
-			# eig=eigen(vi)
-			# emat=(eig$vectors%*%sqrt(diag(eig$values)))
-            # uinv=solve(emat)
-            covi = vi
-            umat = t(chol(covi))
-            uinv = solve(umat)
-            #uinv0 is used for unbalanced
-            uinv0 = uinv
-			######L^-1*y=L^-1*(mu+xb)+e  e~N(0,I) #########
-			for (icl in 1:ncl) {
-				sz = szs[icl]
-                uinv = uinv0[1:sz, 1:sz, drop=FALSE]
-				yi = ycl[[icl]]
-				ytil = c(ytil, uinv %*% as.matrix(yi, ncol=1))
-				ed = ed + sz
-				gtil = rbind(gtil, uinv %*% gmat[st:ed, ,drop=F])
-				st = ed + 1
-			}
-			#####weighted coneB #########
-			dsend = gtil[, (np + 1):(np + capm), drop = FALSE]
-            zsend = gtil[, 1:np, drop = FALSE]
-            ans = coneB(ytil, dsend, vmat = zsend, face=face)
-            edf = ans$df
-            face = ans$face
-            bh = coef(ans)
-			    if (any(round(bh[1:np],6) < 0)) {
-                pos = (1:np)[which(round(bh[1:np],6) < 0)]
-                face = unique(c(pos, face))
-                }
-			muhat = t(bigmat) %*% bh
-			diff = mean((oldmu - muhat)^2)
-			oldmu = muhat
-            dd = t(bigmat[face, ,drop = FALSE])
-            dd2 = gtil[,face,drop=FALSE]
-                xms = list()
-                st = 1
-                ed = 0
-                for (icl in 1:ncl) {
-                    sz = szs[icl]
-                    ed = ed + sz
-                    xms[[icl]] = dd[st:ed, ,drop=F]
-                    st = ed + 1
-                }
-			}
-		ebars = sapply(ecl, mean)
-		sig2hat = fsig(thhat, szs, ecl, ncl, N=n, edf=edf, D=nrow(bigmat), type=type)
-		siga2hat = sig2hat * thhat 
-		ahat = ebars*szs*thhat/(1+szs*thhat)
-	#################testing####################
-	if(test)
-	{
-	        ytil=NULL
-	        gtil = NULL
-			st = 1
-			ed = 0
-			sz = max(szs)
-            pos = which(szs == sz)[1]
-            oneMat = ones[[pos]]
-			vi = diag(sz) + oneMat*thhat  ##covariance matrix
-			covi = vi
-            umat = t(chol(covi))
-            uinv = solve(umat)
-            # eig=eigen(vi)
-			# emat=(eig$vectors%*%sqrt(diag(eig$values)))
-            # uinv=solve(emat)
-            #uinv0 is used for unbalanced
-            uinv0 = uinv
-			######L^-1*y=L^-1*(mu+xb)+e  e~N(0,I) #########
-			for (icl in 1:ncl) {
-				sz = szs[icl]
-                uinv = uinv0[1:sz, 1:sz, drop=FALSE]
-				yi = ycl[[icl]]
-				ytil = c(ytil, uinv %*% as.matrix(yi, ncol=1))
-				ed = ed + sz
-				gtil = rbind(gtil, uinv %*% gmat[st:ed, ,drop=F])
-				st = ed + 1
-			}
-			#####weighted coneB #########
-			dsend = gtil[, (np + 1):(np + capm), drop = FALSE]
-            zsend = gtil[, 1:np, drop = FALSE]
-			
-			yhat=gtil%*%bh                                                    
-            th0 = zsend %*% solve(t(zsend) %*% zsend) %*% (t(zsend)%*%ytil)
-			sse0=sum((ytil-th0)^2)
-			sse1=sum((ytil-yhat)^2)
-		bstat=(sse0-sse1)/sse0
-		m=ncol(gtil)
-		mdist=1:(m+1)*0
-		k0=dim(zsend)[2]
-		for(isim in 1:nsim){
-			ysim=rnorm(n)
-			asim=coneB(ysim,dsend,zsend)
-			df0=asim$df-k0
-			mdist[df0+1]=mdist[df0+1]+1
-		}
-		mdist=mdist/nsim
-		ps=mdist[1]
-		for(d in 1:m){
-			ps=ps+pbeta(bstat,d/2,(n-d-k0)/2)*mdist[d+1]
-		}
-		pval=1-ps
-    }
-	rslt = list(muhat = muhat,  bh = bh,ahat = ahat, sig2hat = sig2hat, siga2hat = siga2hat, thhat = thhat, bigmat = bigmat,pval=pval,bstat=bstat)
-    return (rslt)
-}
-
-shape_bstat_lmm<-function(res_dat)
-{
-shape=rep('NA',nrow(res_dat))
-idx=match(c('b.inc', 'b.dec', 'b.cov', 'b.con'),colnames(res_dat))
-bstat=res_dat[,idx]
-#idx=which((res_dat$shape!='None'))
-idx=1:nrow(res_dat)
-shape_index=c("Growth","Recession","Trough","Peak")
-for(k in idx)
-{
-tmp=bstat[k,]
-shape[k]=shape_index[which(tmp==max(tmp)[1])]
-}
-return(shape)
-}
-
-#################functions from package CGAM##################
-
-f_ecl = function(evec, ncl, sz) {
-	ecl = list()
-	st = 1
-	ed = 0
-	for (icl in 1:ncl) {
-		if (length(sz) > 1) {
-			szi = sz[icl]
-		} else {szi = sz}
-		ed = ed + szi
-		ecl[[icl]] = evec[st:ed]
-		st = ed + 1
-	}
-	return (ecl)
-}
-
-makedelta = function(x, sh, numknots = 0, knots = 0, space = "E", suppre = FALSE, interp = FALSE) {
-#if (!interp) {
-#x = (x - min(x)) / (max(x) - min(x))
-#}
-	n = length(x)
-# find unique x values
-#round(x,8) will make 0 edge in amat!
-	#xu = sort(unique(round(x, 8)))
-#new: center and scale to avoid numerical instabillity
-	xu = sort(unique(x))
-	n1 = length(xu)
-	sm = 1e-7
-	ms = NULL
-#  increasing or decreasing
-	if (sh < 3) {
-		amat = matrix(0, nrow = n1 - 1, ncol = n)
-		for (i in 1: (n1 - 1)) {
-			amat[i, x > xu[i]] = 1
-		}
-		if (sh == 2) {amat = -amat}
-		if (!interp) {
-			for (i in 1:(n1 - 1)) {
-#new: use ms in predict.cgam
-				ms = c(ms, mean(amat[i, ]))
-				amat[i, ] = amat[i, ] - mean(amat[i, ])
-			}
-		}
-	} else if (sh == 3 | sh == 4) {
-#  convex or concave
-		amat = matrix(0, nrow = n1 - 2 ,ncol = n)
-		#for (i in 1: (n1 - 2)) {
-		#	amat[i, x > xu[i]] = x[x > xu[i]] - xu[i]
-		#}
-		for (i in 1: (n1 - 2)) {
-			amat[i, x > xu[i+1]] = x[x > xu[i+1]] - xu[i+1]
-		}
-		if (sh == 4) {amat = -amat}
-		xm = cbind(1:n*0+1,x)
-		xpx = solve(t(xm) %*% xm)
-		pm = xm %*% xpx %*% t(xm)
-#new: use ms in predict.cgam
-		if (!interp) {
-			ms = amat %*% t(pm)
-			#amat = amat - amat %*% t(pm)
-			amat = amat - ms
-		}
-	} else if (sh > 4 & sh < 9) {
-		amat = matrix(0, nrow = n1 - 1, ncol = n)
-		if (sh == 5) { ### increasing convex
-			for (i in 1:(n1 - 1)) {
-				amat[i, x > xu[i]] = (x[x > xu[i]] - xu[i]) / (max(x) - xu[i])
-			}
-			if (!interp) {
-				for (i in 1:(n1 - 1)) {
-					ms = c(ms, mean(amat[i, ]))
-					amat[i,] = amat[i,] - mean(amat[i,])
-				}
-			}
-		} else if (sh == 6) {  ## decreasing convex
-			for (i in 1:(n1 - 1)) {
-				amat[i, x < xu[i + 1]] = (x[x < xu[i + 1]] - xu[i + 1]) / (min(x) - xu[i + 1])
-			}
-			if (!interp) {
-				for (i in 1:(n1 - 1)) {
-					ms = c(ms, mean(amat[i, ]))			
-					amat[i,] = amat[i,] - mean(amat[i, ])
-				}
-			}
-#print (ms)
-		} else if (sh == 7) { ## increasing concave
-			for (i in 1:(n1 - 1)) {
-				amat[i, x < xu[i + 1]] = (x[x < xu[i + 1]] - xu[i + 1]) / (min(x) - xu[i + 1])
-			}
-			if (!interp) {
-				for (i in 1:(n1 - 1)) {
-					ms = c(ms, mean(amat[i, ]))
-					amat[i,] = -amat[i,] + mean(amat[i,])
-				}		
-			}
-		} else if (sh == 8) {## decreasing concave
-			for (i in 1:(n1 - 1)) {
-				amat[i, x > xu[i]] = (x[x > xu[i]] - xu[i]) / (max(x) - xu[i])
-			}
-			if (!interp) {
-				for (i in 1:(n1 - 1)) {
-					ms = c(ms, mean(amat[i, ]))
-					amat[i,] = -amat[i,] + mean(amat[i,])
-				}
-			}
-		}
-	} else if (sh > 8 & sh < 18) {
-        #new: add two knots
-		#if (all(knots == 0) & numknots == 0) {
-		if (length(knots) < 2 & numknots == 0) {
-			if (sh == 9 | sh == 10) {#1 2
-                #k = trunc(n1^(1/5)) + 4
-                if (n1 <= 50) {
-                    k = 5
-                } else if (n1>50 && n1<100) {
-                    k = 6
-                } else if (n1>= 100 && n1<200) {
-                    k = 7
-                } else {
-                    k = trunc(n1^(1/5)) + 6
-                }
-			} else {
-                #k = trunc(n1^(1/7) + 4)
-                if (n1 <= 50) {
-                    k = 5
-                } else if (n1>50 && n1<100) {
-                    k = 6
-                } else if (n1>= 100 && n1<200) {
-                    k = 7
-                } else {
-                    k = trunc(n1^(1/7)) + 6
-                }
-            }
-			if (space == "Q") {
-				t = quantile(xu, probs = seq(0, 1, length = k), names = FALSE)
-			}
-			if (space == "E") {
-				#t = 0:k / k * (max(x) - min(x)) + min(x)
-				t = 0:(k-1) / (k-1) * (max(x) - min(x)) + min(x)
-			} 
-		#} else if (any(knots != 0) & numknots == 0) {
-		} else if (length(knots) >= 2 & numknots == 0) {
-			t = knots
-		#} else if (all(knots == 0) & numknots != 0) {
-		} else if (length(knots) < 2 & numknots != 0) {
-			if (space == "Q") {
-				t = quantile(xu, probs = seq(0, 1, length = numknots), names = FALSE)
-			} 
-			if (space == "E") {
-				#k = numknots
-#new: numknots should be the # of all knots
-				k = numknots - 1
-				#if (sh == 9 | sh == 10) {#1 2
-				#	k = trunc(n1^(1/5)) + 4
-				#} else {k = trunc(n1^(1/7) + 4)}
-				t = 0:k / k * (max(x) - min(x)) + min(x)
-			}
-		#} else if (any(knots != 0) & numknots != 0) {
-		} else if (length(knots) >= 2 & numknots != 0) {
-			#t0 = quantile(xu, probs = seq(0, 1, length = numknots), names = FALSE)
-			t = knots
-			if (!suppre) {
-				print("'knots' is used! 'numknots' is not used!")
-			}
-			#print ("'knots' is used!")
-			#if (numknots != length(knots)) {
-			#	if (!suppre) {
-			#		print("length(knots) is not equal to 'numknots'! 'knots' is used!")
-			#	}
-			#} else if (any(t0 != knots)) {
-			#	if (!suppre) {
-			#		print("equal x-quantiles knots != 'knots'! 'knots' is used! ") 
-			#	}
-			#}
-		}
-		if (sh == 9) {#1			
-			amat_ans = monincr(x, t, interp)
-			amat = amat_ans$sigma
-			ms = amat_ans$ms
-		} else if (sh == 10) {#2
-			amat_ans = mondecr(x, t, interp)
-			amat = amat_ans$sigma
-			ms = amat_ans$ms
-		} else if (sh == 11) {#3
-			amat_ans = convex(x, t, interp)
-			amat = amat_ans$sigma
-			ms = amat_ans$ms
-		} else if (sh == 12) {#4
-			amat_ans = concave(x, t, interp)
-			amat = amat_ans$sigma
-			ms = amat_ans$ms
-		} else if (sh == 13) {#5
-			amat_ans = incconvex(x, t, interp)
-			amat = amat_ans$sigma
-			ms = amat_ans$ms
-		} else if (sh == 14) {#6
-			amat_ans = incconcave(x, t, interp)
-			amat = amat_ans$sigma
-			ms = amat_ans$ms
-		} else if (sh == 15) {#7
-			#amat_ans = -incconcave(x, t, interp)
-			amat_ans = incconcave(x, t, interp)
-			amat = -amat_ans$sigma
-			if (!interp) {
-				ms = -amat_ans$ms
-			}
-		} else if (sh == 16) {#8
-			#amat_ans = -incconvex(x, t, interp)
-			amat_ans = incconvex(x, t, interp)
-			amat = -amat_ans$sigma
-			if (!interp) {
-				ms = -amat_ans$ms
-			}
-		} else if (sh == 17) {#unconstrained
-			amat_ans = incconvex(x, t, interp)
-			amat = amat_ans$sigma
-			ms = amat_ans$ms
-			#amat = -incconcave(x, t)
-			#amat = rbind(x, t(bcspl(x, m = length(t), knots = t)$bmat)) 
-			#amat = rbind(x, convex(x, t))
-		}
-	}
-	#if (sh < 9) {
-	#	rslt = list(amat = amat, knots = 0, ms = ms)
-	#} else {
-	#	rslt = list(amat = amat, knots = t, ms = ms)
-	#}
-	if (sh < 9) {t = 0}	
-	rslt = list(amat = amat, knots = t, ms = ms)
-	rslt
-}
-
-# Monotone increasing
-monincr = function(xs, t, interp = FALSE) {
-	n = length(xs)
-#xs = (xs - min(xs)) / (max(xs) - min(xs))
-	x = sort(xs)
-	k = length(t) - 2
-	m = k + 2
-	sigma = matrix(0, nrow = m, ncol = n)
-	obs = 1:n
-	knt = 1:m
-	for (i in 1:(k+2)) {knt[i] = min(obs[abs(x - t[i]) == min(abs(x - t[i]))])}
-	for (j in 1:(k-1)) {
-		index = x >= t[1] & x <= t[j]
-		sigma[j, index] = 0
-
-		index = x > t[j] & x <= t[j+1]
-		sigma[j, index] = (x[index] - t[j])^2 / (t[j+2] - t[j]) / (t[j+1] - t[j])
-
-		index = x > t[j+1] & x <= t[j+2]
-		sigma[j, index] = 1 - (x[index] - t[j+2])^2 / (t[j+2] - t[j+1]) / (t[j+2] - t[j])
-	    
-		index = x > t[j+2] #& x <= t[m]
-		sigma[j, index] = 1
-	}
-	index = x >= t[1] & x <= t[k]
-	sigma[k, index] = 0
-	
-	index = x > t[k] & x <= t[k+1]
-	sigma[k, index] = (x[index] - t[k])^2 / (t[k+2] - t[k]) / (t[k+1] - t[k])
-	
-	index = x > t[k+1] & x <= t[k+2]
-	sigma[k, index] = 1 - (x[index] - t[k+2])^2 / (t[k+2] - t[k+1]) / (t[k+2] - t[k])
-	
-	index = x >= t[1] & x <= t[2]
-	sigma[k+1, index] = 1 - (t[2] - x[index])^2 / (t[2] - t[1])^2
-
-	index = x > t[2] 
-	sigma[k+1, index] = 1
-	
-	index = x >= t[1] & x <= t[k+1]
-	sigma[k+2, index] = 0
-	
-	index = x > t[k+1] & x <= t[k+2]
-	sigma[k+2, index] = (x[index] - t[k+1])^2 / (t[k+2] - t[k+1])^2
-	
-#new:
-	ms = NULL
-	if (!interp) {
-		ms = apply(sigma, 1, mean)
-		for (i in 1:m) {
-			sigma[i,] = sigma[i,] - mean(sigma[i,])
-			sigma[i,] = sigma[i, rank(xs)]
-		} 
-	} else {
-		for (i in 1:m) {
-			#sigma[i,] = sigma[i,] - mean(sigma[i,])
-			sigma[i,] = sigma[i, rank(xs)]
-		} 
-	}
-	rslt = list(sigma = sigma, ms = ms)
-	rslt
-}	
-
-
-########################################################
-# Monotone decreasing
-mondecr = function(xs, t, interp = FALSE) {
-#xs = (xs - min(xs)) / (max(xs) - min(xs))
-	x = sort(xs)
-	n = length(x)
-	k = length(t) - 2
-	m = k + 2
-	sigma = matrix(0, nrow = m, ncol = n)
-	obs = 1:n
-	#knt = 1:m
-	#for (i in 1:(k + 2)) {knt[i] = min(obs[abs(x - t[i]) == min(abs(x - t[i]))])}
-	#t = x[knt]
-	for (j in 1:(k - 1)) {
-	 	index = x >= t[1] & x <= t[j]
-	 	sigma[j, index] = 1
-
-		index = x > t[j] & x <= t[j+1]
-	 	sigma[j, index] = 1 - (x[index] - t[j])^2 / (t[j+2] - t[j]) / (t[j+1] - t[j])
-
-	    	index = x > t[j+1] & x <= t[j+2]
-	    	sigma[j, index] = (x[index] - t[j+2])^2 / (t[j+2] - t[j+1]) / (t[j+2] - t[j])
-
-	    	index = x > t[j+2] 
-	    	sigma[j, index] = 0
-	}
-
-	index = x >= t[1] & x <= t[k]
-	sigma[k, index] = 1
-	
-	index = x > t[k] & x <= t[k+1]
-	sigma[k, index] = 1 - (x[index] - t[k])^2 / (t[k+2] - t[k]) / (t[k+1] - t[k])
-
-	index = x > t[k+1] & x <= t[k+2]
-	sigma[k, index] = (x[index] - t[k+2])^2 / (t[k+2] - t[k+1]) / (t[k+2] - t[k])
-
-	index = x >= t[1] & x <= t[2]
-	sigma[k+1, index] = (t[2] - x[index])^2 / (t[2] - t[1])^2
-
-	index = x > t[2] 
-	sigma[k+1, index] = 0
-
-	index = x >= t[1] & x <= t[k+1]
-	sigma[k+2, index] = 1
-	
-	index = x > t[k+1] & x <= t[k+2]
-	sigma[k+2, index] = 1 - (x[index] - t[k+1])^2 / (t[k+2] - t[k+1])^2
-
-	ms = NULL
-	if (!interp) {
-		ms = apply(sigma, 1, mean)
-		for (i in 1:m) {
-			sigma[i,] = sigma[i,] - mean(sigma[i,])
-			sigma[i,] = sigma[i, rank(xs)]
-		} 
-	} else {
-		for (i in 1:m) {
-			#sigma[i,] = sigma[i,] - mean(sigma[i,])
-			sigma[i,] = sigma[i, rank(xs)]
-		} 
-	}
-	rslt = list(sigma = sigma, ms = ms)
-	rslt
-}
-
-########################################################
-# Convex
-convex = function(xs, t, interp = FALSE) {
-#xs = (xs - min(xs)) / (max(xs) - min(xs))
-	x = sort(xs)
-	n = length(x)
-	k = length(t) - 2
-	m = k + 2
-	sigma = matrix(0, nrow = m, ncol = n)
-	obs = 1:n
-	#knt = 1:m
-	#for (i in 1:(k+2)) {knt[i] = min(obs[abs(x - t[i]) == min(abs(x - t[i]))])}
-	for (j in 1:(k-1)) {
-	 	index = x >= t[1] & x <= t[j]
-	 	sigma[j, index] = 0
-	 	
-	 	index = x > t[j] & x <= t[j+1]
-	 	sigma[j, index] = (x[index] - t[j])^3 / (t[j+2] - t[j]) / (t[j+1] - t[j]) / 3
-	    
-	   	index = x > t[j+1] & x <= t[j+2]
-	    	sigma[j, index] = x[index] - t[j+1] - (x[index] - t[j+2])^3 / (t[j+2] - t[j]) / (t[j+2] - t[j+1]) / 3 + (t[j+1] - t[j])^2 / 3 /(t[j+2] - t[j]) - (t[j+2] - t[j+1])^2 / 3 / (t[j+2] - t[j])
-
-	    	index = x > t[j+2]
-	    	sigma[j, index] = (x[index] - t[j+1]) + (t[j+1] - t[j])^2 / 3 / (t[j+2] - t[j]) - (t[j+2] - t[j+1])^2 / 3 / (t[j+2] - t[j])
-	}
-	index = x >= t[1] & x <= t[k]
-	sigma[k, index] = 0
-	
-	index = x > t[k] & x <= t[k+1]
-	sigma[k, index] = (x[index] - t[k])^3 / (t[k+2] - t[k]) / (t[k+1] - t[k]) / 3
-
-	index = x > t[k+1] & x <= t[k+2]
-	sigma[k, index] = x[index] - t[k+1] - (x[index] - t[k+2])^3 / (t[k+2] - t[k]) / (t[k+2] - t[k+1]) / 3 + (t[k+1] - t[k])^2 / 3 / (t[k+2] -t[k]) - (t[k+2] - t[k+1])^2 / 3 / (t[k+2] - t[k])
-	
-	index = x >= t[1] & x <= t[2]
-	sigma[k+1, index] = x[index] - t[1] + (t[2] - x[index])^3 / (t[2] - t[1])^2 / 3 - (t[2] - t[1]) / 3 #-(t[2]-t[1])^3/(t[2]-t[1])^2/3 #
-	
-	index = x > t[2] 
-	sigma[k+1, index] = x[index] - t[1] - (t[2] - t[1]) / 3 #-(t[2]-t[1])^3/(t[2]-t[1])^2/3#
-		
-	index = x >= t[1] & x <= t[k+1]
-	sigma[k+2, index] = 0
-	
-	index = x > t[k+1] & x <= t[k+2]
-	sigma[k+2, index] = (x[index] - t[k+1])^3 / (t[k+2] - t[k+1])^2 / 3
-	
-	ms = NULL
-	if (!interp) {
-		xm = cbind(1:n*0+1, x)
-		pm = xm %*% solve(t(xm) %*% xm) %*% t(xm)
-		ms = matrix(0, nrow = nrow(sigma), ncol = ncol(sigma))
-		for (i in 1:m) {
-			ms[i,] = pm %*% sigma[i,]
-			ms[i,] = ms[i, rank(xs)]		
-			#rng=max(sigma[i,])
-			#sigma[i,]=sigma[i,]/rng
-			sigma[i,] = sigma[i,] - pm %*% sigma[i,]
-			sigma[i,] = sigma[i, rank(xs)]
-		}
-	} else {
-		for (i in 1:m) {
-			#sigma[i,] = sigma[i,] - pm %*% sigma[i,]
-			sigma[i,] = sigma[i, rank(xs)]
-		}
-	}
-	rslt = list(sigma = sigma, ms = ms)
-	rslt
-}
-
-
-########################################################
-# Concave
-concave = function(xs, t, interp = FALSE) {
-#xs = (xs - min(xs)) / (max(xs) - min(xs))
-	x = sort(xs)
-	n = length(x)
-	k = length(t) - 2
-	m = k + 2
-	sigma = matrix(0, nrow = m, ncol = n)
-	obs = 1:n
-	#knt = 1:m
-	#for (i in 1:(k+2)) {knt[i] = min(obs[abs(x - t[i]) == min(abs(x - t[i]))])}
-	#t = x[knt]
-	for (j in 1:k) {
-	 	index = x >= t[1] & x <= t[j]
-	 	sigma[j, index] = x[index] - t[1]
-	 	
-	 	index = x > t[j] & x <= t[j+1]
-	 	sigma[j, index] = t[j] - t[1] + ((t[j+1] - t[j])^3 - (t[j+1] - x[index])^3) / 3 / (t[j+1] - t[j]) / (t[j+2] - t[j]) + (x[index] - t[j]) * (t[j+2] - t[j+1]) / (t[j+2] - t[j])
-	    
-	        index = x > t[j+1] & x <= t[j+2]
-	    	sigma[j, index] = t[j] - t[1] + (t[j+1] - t[j])^2 / 3 / (t[j+2] - t[j]) + (t[j+2] - t[j+1]) * (t[j+1] - t[j]) / (t[j+2] - t[j]) + ((t[j+2] - t[j+1])^3 - (t[j+2] - x[index])^3) / 3 / (t[j+2] - t[j+1]) / (t[j+2] - t[j])	
- 	   
- 	   	index = x > t[j+2]
- 	   	sigma[j, index] = t[j] - t[1] + (t[j+1] - t[j])^2 / 3 / (t[j+2] - t[j]) + (t[j+2] - t[j+1]) * (t[j+1] - t[j]) / (t[j+2] - t[j]) + (t[j+2] - t[j+1])^2 / 3 / (t[j+2] - t[j])
-	}
-
-	index = x >= t[1] & x <= t[2]
-	sigma[k+1, index] = -(t[2] - x[index])^3 / 3 / (t[2] - t[1])^2
-	
-	index = x > t[2] 
-	sigma[k+1, index] = 0
-	
-	index = x >= t[1] & x <= t[k+1]
-	sigma[k+2, index] = x[index] - t[1]
-	
-	index = x > t[k+1] & x <= t[k+2]
-	sigma[k+2, index] = t[k+1] - t[1] + ((t[k+2] - t[k+1])^2 * (x[index] - t[k+1]) - (x[index] - t[k+1])^3 / 3) / (t[k+2] - t[k+1])^2
-	
-	ms = NULL
-	if (!interp) {
-		xm = cbind(1:n*0+1, x)
-		pm = xm %*% solve(t(xm) %*% xm) %*% t(xm)
-		ms = matrix(0, nrow = nrow(sigma), ncol = ncol(sigma))
-		for (i in 1:m) {
-			ms[i,] = pm %*% sigma[i,]
-			ms[i,] = ms[i, rank(xs)]		
-			sigma[i,] = sigma[i,] - pm %*% sigma[i,]
-			sigma[i,] = sigma[i, rank(xs)]
-		}
-	} else {
-		for (i in 1:m) {
-			#sigma[i,] = sigma[i,] - pm %*% sigma[i,]
-			sigma[i,] = sigma[i, rank(xs)]
-		}
-	}	
-	rslt = list(sigma = sigma, ms = ms)
-	rslt
-}
-
-fth2rm = function(th, szs, ycl, N, xcl, p=2, type='b', xtx=NULL, xtx2=NULL, xmat_face=NULL, ones=NULL) {
-    ybar = sapply(ycl, mean)
-    y = unlist(ycl)
-    num = sum(szs^2*ybar^2/(1+szs*th)^2)
-    den = sum(y^2) - sum(th*szs^2*ybar^2/(1+szs*th))
-    ncl = length(ycl)
-    hmat = matrix(0, p, p)
-    xtils = list()
-    #if (type == 'b') {
-    #    n = szs[1]
-    #    hmat = xtx - th/(1+n*th)*xtx2
-    #} else {
-    ones2 = list()
-    for(icl in 1:ncl){
-        ni = szs[icl]
-        xi = xcl[[icl]]
-        xm = xi
-        #onevec = 1:ni*0+1
-        #onemat = onevec%*%t(onevec)
-        onemat = ones[[icl]]
-        #ones[[icl]] = onemat*th/(1+ni*th)
-        ones2[[icl]] = onemat/(1+ni*th)^2
-        rinv = diag(ni) - th/(1+ni*th)*onemat
-        hmat = hmat + t(xm) %*% rinv %*% xm
-        #xtil = t(onevec)%*%xm
-        #xtils[[icl]] = xtil
-    }
-    #oneMat = as.matrix(bdiag(ones))
-    #oneMat2 = as.matrix(bdiag(ones2))
-    #hmat = xtx - crossprod(xmat_face, oneMat) %*% xmat_face
-    
-    #ones=ones2=list()
-    #    st = 1
-    #    ed = 0
-    #    for (icl in 1:ncl) {
-    #        sz=szs[icl]
-    #        ed = ed + sz
-    #        onevec = 1:sz*0+1
-    #        onemat = onevec%*%t(onevec)
-    #        ones[[icl]] = onemat*th/(1+sz*th)
-    #        ones2[[icl]] = onemat/(1+sz*th)^2
-    #        st = ed + 1
-    #    }
-    #    oneMat = as.matrix(bdiag(ones))
-    #    oneMat2 = as.matrix(bdiag(ones2))
-    #    hmat = xtx - crossprod(xmat_face, oneMat) %*% xmat_face
-    #}
-    #hinv = solve(hmat)
-    lmat = chol(hmat)
-    hinv = chol2inv(lmat)
-    tr = 0
-    #if (type == 'b') {
-    #    n = szs[1]
-        #onevec = 1:n*0+1
-        for (icl in 1:ncl) {
-            ni = szs[icl]
-            xi = xcl[[icl]]
-            onevec = 1:ni*0+1
-            xtil = t(onevec)%*%xi
-            tr = tr + sum(diag(hinv %*% crossprod(xtil)/(1+ni*th)^2))
-            #tr = tr + 1/(1+n*th)^2*sum(diag(hinv %*% crossprod(xtil)))
-        }
-    #    tr = 1/(1+n*th)^2*sum(diag(hinv %*% xtx2))
-    #} else {
-        # for(icl in 1:ncl) {
-        #    ni = szs[icl]
-        #    xtil = xtils[[icl]]
-        #    tr = tr + sum(diag(hinv %*% crossprod(xtil)/(1+ni*th)^2))
-        #}
-        #    xtx2ub = crossprod(xmat_face, oneMat2) %*% xmat_face
-        #    tr = sum(diag(hinv %*% xtx2ub))
-    #}
-    rml = 1/2*tr
-    obj = (N-p)/2*num/den - 1/2*sum(szs/(1+szs*th)) + rml
-    return (obj)
-}
-
-fsig = function(thhat, szs, ycl, ncl, N, edf, D, type='b') {
-	ybars = sapply(ycl, mean)
-    d = min(1.5*edf, D)
-	if (type == 'b') {
-		sz = N/ncl
-		sig2hat = (sum(unlist(ycl)^2) - sz^2*thhat/(1+sz*thhat) * sum(ybars^2))/(N-d-1)
-	} else {
-		sig2hat = (sum(unlist(ycl)^2) - sum(thhat*szs^2*ybars^2/(1 + szs*thhat)))/(N-d-1)
-	}
-	return (sig2hat)
-}
-
-GetModelFits<-function(res_dat,res,stage)
-{
-sig_gene_idx=which(res_dat$SignificantDE=='Yes')
-ModelFits=matrix(0,nrow=length(sig_gene_idx),ncol=length(unique(stage)))
-rownames(ModelFits)=res_dat$gene[sig_gene_idx]
-colnames(ModelFits)=sort(unique(stage))
-pattern=c('Growth','Recession','Trough','Peak')
-for(i in sig_gene_idx)
-{
-for(j in sort(unique(stage)))
-{
-ModelFits[res_dat$gene[i],j+1]=mean(res[[match(res_dat$pattern[i],pattern)+1]][i,which(stage==j)])
-}
-}
-return(ModelFits)
-}
-
-logFC_filtering<-function(data,stage)
-{
-maxFC=rep(0,nrow(data))
-stage_idx=sort(unique(stage))
-mat=matrix(0,nrow=nrow(data),ncol=length(stage_idx))
-for(i in stage_idx)
-{
-mat[,i+1]=rowMeans(as.matrix(data[,which(stage==i)]))
-}
-maxFC=apply(mat,1,max)-apply(mat,1,min)
-return(maxFC)
-}
-
-cell_aggregate<-function(counts,group,stage,size=20)
-{
-suppressPackageStartupMessages(library("Matrix.utils"))
-suppressPackageStartupMessages(library("Seurat"))
-meta=data.frame(cell=colnames(counts),group=group,stage=stage)
-N=length(unique(group))
-
-pseudolabel<-lapply(1:N,function(x){
-g=unique(group)[x]
-idx=sample(which(group==g))
-num=floor(length(idx)/size)+1
-pseudolabel=rep(paste0("pseudocell",1:num,"_",g),each=size)[1:length(idx)]
-return(pseudolabel)
-})
-pseudolabel=do.call(c,pseudolabel)
-meta$pseudolabel=pseudolabel
-
-pseudo_counts <- aggregate.Matrix(t(counts), 
-                       groupings = meta$pseudolabel, fun = "sum") 
-idx=duplicated(meta$pseudolabel)
-pseudo_meta=meta[which(idx==FALSE),]
-
-pseudo_counts=t(as.matrix(pseudo_counts))				
-idx=match(pseudo_meta$pseudolabel,colnames(pseudo_counts))		
-pseudo_counts=pseudo_counts[,idx]		
-seu<-CreateSeuratObject(pseudo_counts)
-seu<-NormalizeData(seu)	
-seu@meta.data=cbind(seu@meta.data,pseudo_meta)	   
-return(seu)
-}
-
-
-setClass("TDEseq",representation(dfTDEseqResults="data.frame",ModelFits="matrix",parameters="list",NormalizeData="matrix",Metadata="data.frame"))
-
-####Visualization########
-
-#' PatternHeatmap: Heatmap to show the pattern specific temporal genes. Please first install Seurat, ggplot2, ComplexHeatmap and circlize packages.
-#' 
-#' @param obj The results of TDEseq analysis
-#' @param features Genes to be shown in heatmap
-#' @param features.show Genes to be annotated in heatmap
-#' @param features.num Number of genes to be shown for each patterns 
-#' @param cols Color of the heatmap.
-#' @author Yue Fan, Shiquan Sun
-#' @export
-PatternHeatmap<-function(obj,features=NULL,features.show=NULL,features.num=50,cols=c("navy", "white", "firebrick3"))
-{
-suppressPackageStartupMessages(library("Seurat"))
-suppressPackageStartupMessages(library("ggplot2"))
-suppressPackageStartupMessages(library("ComplexHeatmap"))
-suppressPackageStartupMessages(library("circlize"))
-seu<-CreateSeuratObject(obj@NormalizeData)
-seu@assays$RNA@data<-obj@NormalizeData
-seu<-ScaleData(seu)
-mat <- GetAssayData(seu,slot = 'scale.data')
-metadata <- obj@Metadata
-res_dat=obj@dfTDEseqResults
-res_dat=res_dat[order(res_dat$pval),]
-feature_annot=c()
-if(is.null(features))
-{
-features_plot=c()
-for(pattern in c("Growth","Recession","Peak","Trough"))
-{
-idx=which(res_dat$pattern==pattern)
-if(length(idx)>=features.num)
-{
-features_plot=c(features_plot,res_dat$gene[idx[1:features.num]])
-feature_annot=c(feature_annot,rep(pattern,features.num))
-}else{
-features_plot=c(features_plot,res_dat$gene[idx])
-feature_annot=c(feature_annot,rep(pattern,length(idx)))
-}
-}
-}else{
-features_plot=c()
-idx=match(features,res_dat$gene)
-if(any(is.na(idx)))
-{
-idx=idx[-which(is.na(idx))]
-}
-features=features[idx]
-subres_dat=res_dat[idx,]
-for(pattern in c("Growth","Recession","Peak","Trough"))
-{
-idx=which(subres_dat$pattern==pattern)
-features_plot=c(features_plot,res_dat$gene[idx])
-feature_annot=c(feature_annot,rep(pattern,length(idx)))
-}
-
-}
-
-group_info <- metadata$Time_Origin
-col_fun = colorRamp2(c(-2, 0, 2),cols)
-
-mat=mat[features_plot,]
-
-if(!is.null(features.show))
-{
-gene_pos <- match(features.show,rownames(mat))
-row_anno <- rowAnnotation(gene=anno_mark(at=gene_pos,labels = features.show,
-                                         labels_gp=gpar(fontface = 3)))
-										 
-
-
-f1=Heatmap(mat,
-           name = 'Expression',
-           col = col_fun,
-           cluster_rows = FALSE,                 
-           cluster_columns = F,                  
-           show_column_dend=F,                    
-           show_row_dend = F,                     
-           show_row_names = FALSE,                   
-           show_column_names = F,                 
-           column_split = group_info,      
-           row_split = feature_annot,		   
-           right_annotation = row_anno,                  
-           border_gp = gpar(col = "black", lty = 2) 
-           )	
-}else{
-
-f1=Heatmap(mat,
-           name = 'Expression',
-           col = col_fun,
-           cluster_rows = FALSE,                 
-           cluster_columns = F,                  
-           show_column_dend=F,                    
-           show_row_dend = F,                     
-           show_row_names = FALSE,                   
-           show_column_names = F,                 
-           column_split = group_info,      
-           row_split = feature_annot,		                 
-           border_gp = gpar(col = "black", lty = 2) 
-           )	
-
-
-}		   
-return(f1)
-}
-
-#' PatternHeatmap: Feature plot to show the pattern specific temporal genes. Please first install Seurat, ggplot2 and tidydr packages.
-#' 
-#' @param obj The results of TDEseq analysis
-#' @param features Genes to be shown in feature plot
-#' @author Yue Fan, Shiquan Sun
-#' @export
-PatternFeature<-function(obj,feature)
-{
-suppressPackageStartupMessages(library("Seurat"))
-suppressPackageStartupMessages(library("ggplot2"))
-suppressPackageStartupMessages(library("tidydr"))
-#Set background and format
-tsne_theme <- theme( 
-  axis.line=element_blank(), 
-  axis.text.x=element_blank(), 
-  axis.text.y=element_blank(), 
-  axis.ticks=element_blank(), 
-  axis.title.x=element_blank(), 
-  axis.title.y=element_blank(), 
-  panel.background=element_blank(), 
-  panel.border=element_blank(), 
-  panel.grid.major=element_blank(), 
-  panel.grid.minor=element_blank()) +
-  theme_dr(xlength = 0.15, ylength = 0.15,
-           arrow = grid::arrow(length = unit(0.1, "inches"), type = "closed"))+
-  theme(panel.grid = element_blank())+theme(text = element_text(size=10))+
-  theme(axis.line.x=element_line(size=1))+
-  theme(axis.line.y=element_line(size=1))
-
-p <- FeaturePlot(
-  seurat,
-  features=feature,
-  cols = c('#690E61', '#28748D','#F6E529'),
-  max.cutoff='q98',label.size = 20)
-p=p+ tsne_theme
-return(p)
-}
-
-#' PatternLine: Line plot to show the pattern specific temporal genes. Please first install ggplot2.
-#' 
-#' @param seuobj A seurat object with UMAP embeddings been calculated
-#' @param features Genes to be shown in feature plot
-#' @author Yue Fan, Shiquan Sun
-#' @export
-PatternLine<-function (obj, feature.show = NULL, cols = NULL) 
-{
-    if(is.null(cols))
-	{
-	cols=c('#E50C7D',"#E34627","#A22066","#A474A4","#2D8573","#E1DE15","#C16728","#2578BE","#738DC8","#C0C0C0", '#7d8d8e','#2a24d0','#a2292e','#274382','#838d36')
-	}
-    suppressPackageStartupMessages(library("ggplot2"))
-	feature.show=feature.show[feature.show%in%rownames(obj@ModelFits)]
-	if(length(feature.show)==0)
-	{
-	stop(paste0("Genes to be shown are not specified!!"))
-	}
-    dat = obj@ModelFits[feature.show, ]
-    time = sort(unique(obj@Metadata$Time_Origin))
-	N=length(feature.show)
-	if(N!=1)
-	{
-	data=lapply(1:N,function(x){dat=data.frame(stage=time,expr=dat[x,],feature=feature.show[x])
-	return(dat)
-	})
-	data=do.call(rbind,data)
-	}else{
-	data=data.frame(stage=time,expr=dat,feature=feature.show)
-	}
-    p <- ggplot(data = data, aes(x = stage, y = expr, color = feature)) + 
-        stat_smooth(method = "loess", aes(col = feature), se = FALSE, size = 3) + 
-		theme_classic() + 
-		xlab("Stage") + 
-		ylab("log(count+1)")+
-		scale_colour_manual(values=cols)+
-		theme(axis.title=element_text(size=rel(2),face="bold"),
-              axis.text=element_text(size=rel(2),face="bold"),
-              legend.title=element_blank(),
-              legend.text=element_text(size=rel(2),face="bold"))
-    return(p)
-}
+#########################################
+#             CODE END                  #
+#########################################
