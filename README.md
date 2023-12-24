@@ -52,7 +52,7 @@ tde_method = "cell"
 tde_param = list(sample.var = "batch",
                  stage.var = "stage",
                  fit.model = "lm",
-				         num.core=10)
+		 num.core=10)
 tde <- tdeseq(object = tde, tde.param=tde_param)
 ```
 Users need to specify which column in the meta.data corresponds to sample and time points information by setiing `sample.var` and `stage.var`. We set `fit.model="lm"` to perform linear version of TDEseq. Uesr can perform mixed version of TDEseq by setting `fit.model="lmm"`.
@@ -68,7 +68,7 @@ tde_param = list(sample.var = "batch",
                  lfc = 0.1,
                  max.gcells = Inf,
                  min.tcells = 3,
-				         num.core=10)
+		 num.core=10)
 tde <- tdeseq(object = tde, tde.param=tde_param)
 ```
 1. Remove time points with too few cells by setting `min.tcells`. Here, time points with less than 3 cells will be removed.
