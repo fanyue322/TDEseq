@@ -632,9 +632,7 @@ setMethod(f = 'rowSums',
 
 #' @describeIn TDEseq-methods Calculate \code{\link[base]{names}} on a
 #' \code{TDEseq} object
-#'
-#' @importFrom Matrix names
-#'
+#' 
 #' @export
 #'
 #' @examples
@@ -866,7 +864,7 @@ CalQCMetrics.Assay <- function(object) {
 
 #' @rdname CalQCMetrics
 #' @export
-#' @method CalQCMetrics TDEseq object
+#' @method CalQCMetrics TDEseq
 #'
 CalQCMetrics.TDEseq <- function(object, assay = NULL) {
 	## extract the active assay, RNA or ATAC or Spatial
@@ -1334,7 +1332,7 @@ tail.TDEseq <- .tail
 #' \code{j}
 #'
 #' @export
-#' @method [Assay
+#' @method [ Assay
 #'
 #'
 "[.Assay" <- function(x, i, j, ...) {

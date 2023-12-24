@@ -2,7 +2,7 @@
 % Please edit documentation in R/tdeseq.R
 \name{tdeseq.default}
 \alias{tdeseq.default}
-\title{Fitting the binary or count spatial model to perform differential expression analysis for spatial data}
+\title{Fitting the constrained spline model to perform temporal differential expression analysis for time course scRNA-seq data}
 \usage{
 \method{tdeseq}{default}(
   object,
@@ -37,7 +37,7 @@
 \item{tdeseq.method}{Performing 'cell' or 'pseudocell' strategy. Default is 'cell'.}
 }
 \description{
-Fitting the binary or count spatial model to perform differential expression analysis for spatial data
+Fitting the constrained spline model to perform temporal differential expression analysis for time course scRNA-seq data
 }
 \examples{
 data(exampledata)

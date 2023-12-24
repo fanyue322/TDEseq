@@ -9,7 +9,7 @@
 ######################################################################
 
 #'
-#' Fitting the binary or count spatial model to perform differential expression analysis for spatial data
+#' Fitting the constrained spline model to perform temporal differential expression analysis for time course scRNA-seq data
 #' 
 #' @param object Gene expression matrix
 #' @param fit.method Either 'lmm' or 'lm' to perform (default = lmm).
@@ -43,7 +43,7 @@ tdeseq.default <- function(object,
                   					verbose = FALSE) {
 	
 
-	
+
 	## reordering data ##
 	stage_idx=sort(unique(stage.id))
 	stage_origin=stage.id
@@ -81,6 +81,10 @@ tdeseq.default <- function(object,
     }
 	
 	##  downsampling  ##
+	if(is.null(max.gcells))
+	{
+	max.gcells=Inf
+	}
 	cell_sel=c()
     for(i in unique(sample.id))
     {
