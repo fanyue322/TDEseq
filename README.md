@@ -11,7 +11,7 @@ install_github("fanyue322/TDEseq")
 ```
 
 # Usage
-The main function is TDEseq. You can find the instructions and an example by '?tdeseq'.
+The main function is TDEseq. You can find the instructions and an example by '?tdeseq.default'.
 
 ## Example
 We demonstrate the use of TDEseq to an example simulated time course scRNA-seq data that are here, which are included in the TDEseq package. This toy example is used for testing purposes only:
