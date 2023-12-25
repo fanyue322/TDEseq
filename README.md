@@ -34,6 +34,11 @@ tde <- CreateTDEseqObject(counts = counts, data=norm.data, meta.data = meta.data
 ```
 Note: the time points and sample information must be contained in the meta data.
 
+If only log normalized data is available, users can also create TDEseqObject as:
+```
+tde <- CreateTDEseqObject(counts = norm.data, data=norm.data, meta.data = meta.data)
+```
+
 Alternatively, TDEseqObject can be created directly from a Seurat object 
 ```
 tde <- CreateTDEseqObject(counts = seurat)
