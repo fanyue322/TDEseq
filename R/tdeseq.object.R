@@ -345,7 +345,7 @@ CreateTDEseqObject.default <- function(counts,
 	                               num.core = num.core,...)
 	
 	## add meta.data
-	if(!is.null(meta.data)){object <- AddMetaData(object, meta.data = meta.data)}
+	if(!is.null(meta.data)){object <- AddTDEseqMetaData(object, meta.data = meta.data)}
 	
 	## species for this study
 	object@species <- species
@@ -572,7 +572,7 @@ CreateTDEseqObject <- function(counts,
 setMethod(f = 'colMeans',
   signature = c('x' = 'TDEseq'),
   definition = function(x, na.rm = FALSE, dims = 1, ..., slot = 'counts') {
-    return(colMeans(x = GetTDEseqAssayData(object = x, slot = slot), na.rm = na.rm, dims = dims,
+    return(colMeans(x = GetAssayData(object = x, slot = slot), na.rm = na.rm, dims = dims,
       ...))
   })
 
@@ -590,7 +590,7 @@ setMethod(f = 'colMeans',
 setMethod(f = 'colSums',
   signature = c('x' = 'TDEseq'),
   definition = function(x, na.rm = FALSE, dims = 1, ..., slot = 'counts') {
-    return(Matrix::colSums(x = GetTDEseqAssayData(object = x, slot = slot), na.rm = na.rm, dims = dims,
+    return(Matrix::colSums(x = GetAssayData(object = x, slot = slot), na.rm = na.rm, dims = dims,
       ...))
   })
 
@@ -607,7 +607,7 @@ setMethod(f = 'colSums',
 setMethod(f = 'rowMeans',
   signature = c('x' = 'TDEseq'),
   definition = function(x, na.rm = FALSE, dims = 1, ..., slot = 'counts') {
-    return(Matrix::rowMeans(x = GetTDEseqAssayData(object = x, slot = slot),na.rm = na.rm,dims = dims,
+    return(Matrix::rowMeans(x = GetAssayData(object = x, slot = slot),na.rm = na.rm,dims = dims,
       ...))
   })
 
@@ -626,13 +626,15 @@ setMethod(f = 'rowMeans',
 setMethod(f = 'rowSums',
   signature = c('x' = 'TDEseq'),
   definition = function(x, na.rm = FALSE, dims = 1, ..., slot = 'counts') {
-    return(Matrix::rowSums(x = GetTDEseqAssayData(object = x, slot = slot),na.rm = na.rm,dims = dims,
+    return(Matrix::rowSums(x = GetAssayData(object = x, slot = slot),na.rm = na.rm,dims = dims,
       ...))
   })
 
 #' @describeIn TDEseq-methods Calculate \code{\link[base]{names}} on a
 #' \code{TDEseq} object
-#' 
+#'
+#' @importFrom Matrix names
+#'
 #' @export
 #'
 #' @examples
@@ -744,11 +746,11 @@ ExtractField <- function(string, field = 1, delim = "_") {
 }## end func
 
 
-#' @rdname AddMetaData
+#' @rdname AddTDEseqMetaData
 #' @export
-#' @method AddMetaData Assay
+#' @method AddTDEseqMetaData Assay
 #'
-AddMetaData.Assay <- function(object, meta.data, col.name = NULL) {
+AddTDEseqMetaData.Assay <- function(object, meta.data, col.name = NULL) {
   
   if (is.null(x = col.name) && is.atomic(x = meta.data)) {
     stop("'col.name' must be provided for atomic metadata types (eg. vectors)")
@@ -774,7 +776,7 @@ AddMetaData.Assay <- function(object, meta.data, col.name = NULL) {
   }else if(identical(rownames(old_metadata), rownames(meta.data))){
     object@meta.data <- data.frame(old_metadata, col.name=meta.data)
   }else{
-    stop("AddMetaData:: The rownames of meta.data is not match the original rownames of meta.data!")
+    stop("AddTDEseqMetaData:: The rownames of meta.data is not match the original rownames of meta.data!")
   }## end fi
   
   
@@ -784,7 +786,7 @@ AddMetaData.Assay <- function(object, meta.data, col.name = NULL) {
 
 #' Add Object Metadata
 #'
-#' Internal \code{\link{AddMetaData}} definition
+#' Internal \code{\link{AddTDEseqMetaData}} definition
 #'
 #' @param object An object
 #' @param metadata A data.frame to add, the rownames of metadata must be the same as colnames of
@@ -796,7 +798,7 @@ AddMetaData.Assay <- function(object, meta.data, col.name = NULL) {
 #'
 #' @noRd
 #'
-AddMetaData.TDEseq <- function(object, meta.data, assay = NULL, col.name = NULL) {
+AddTDEseqMetaData.TDEseq <- function(object, meta.data, assay = NULL, col.name = NULL) {
   
   ## select which data to use
   assay <- assay %||% DefaultAssay(object = object)
@@ -836,12 +838,12 @@ AddMetaData.TDEseq <- function(object, meta.data, assay = NULL, col.name = NULL)
 #' @param x An object
 #' @param ... Arguments passed to other methods
 #'
-#' @export AddMetaData
+#' @export AddTDEseqMetaData
 #'
 #' @concept utils
 #'
-AddMetaData <- function(object, ...) {
-  UseMethod(generic = 'AddMetaData', object = object)
+AddTDEseqMetaData <- function(object, ...) {
+  UseMethod(generic = 'AddTDEseqMetaData', object = object)
 }## end func
 
 #' @rdname CalQCMetrics
@@ -849,22 +851,22 @@ AddMetaData <- function(object, ...) {
 #' @method CalQCMetrics Assay
 #'
 CalQCMetrics.Assay <- function(object) {
-	if (IsMatrixEmpty(x = GetTDEseqAssayData(object = object, slot = "counts"))) {
+	if (IsMatrixEmpty(x = GetAssayData(object = object, slot = "counts"))) {
 		return(NULL)
 	}## end fi
-	return(list(cell_level = data.frame(lib.size = Matrix::colSums(GetTDEseqAssayData(object = object, slot = "counts")),
-		  expr.feature = Matrix::colSums(GetTDEseqAssayData(object = object, slot = "counts") > 0), 
-		  pct.dropout = 100*(1 - Matrix::colSums(GetTDEseqAssayData(object = object, slot = "counts") > 0)/nrow(object))), 
-		feature_level = data.frame(expr.counts = Matrix::rowSums(GetTDEseqAssayData(object = object, slot = "counts")), 
-		  expr.cell = Matrix::rowSums(GetTDEseqAssayData(object = object, slot = "counts") > 0),
-		  pct.dropout = 100*(1 - Matrix::rowSums(GetTDEseqAssayData(object = object, slot = "counts") > 0)/ncol(object)),
-		  mean = Matrix::rowMeans(GetTDEseqAssayData(object = object, slot = "counts")),
-		  var = matrixStats::rowVars(as.matrix(GetTDEseqAssayData(object = object, slot = "counts"))) )))
+	return(list(cell_level = data.frame(lib.size = Matrix::colSums(GetAssayData(object = object, slot = "counts")),
+		  expr.feature = Matrix::colSums(GetAssayData(object = object, slot = "counts") > 0), 
+		  pct.dropout = 100*(1 - Matrix::colSums(GetAssayData(object = object, slot = "counts") > 0)/nrow(object))), 
+		feature_level = data.frame(expr.counts = Matrix::rowSums(GetAssayData(object = object, slot = "counts")), 
+		  expr.cell = Matrix::rowSums(GetAssayData(object = object, slot = "counts") > 0),
+		  pct.dropout = 100*(1 - Matrix::rowSums(GetAssayData(object = object, slot = "counts") > 0)/ncol(object)),
+		  mean = Matrix::rowMeans(GetAssayData(object = object, slot = "counts")),
+		  var = matrixStats::rowVars(as.matrix(GetAssayData(object = object, slot = "counts"))) )))
 }## end func
 
 #' @rdname CalQCMetrics
 #' @export
-#' @method CalQCMetrics TDEseq
+#' @method CalQCMetrics TDEseq object
 #'
 CalQCMetrics.TDEseq <- function(object, assay = NULL) {
 	## extract the active assay, RNA or ATAC or Spatial
@@ -931,13 +933,13 @@ DefaultAssay <- function(object, ...) {
 
 #' @rdname AssayData
 #' @export
-#' @method GetTDEseqAssayData Assay
+#' @method GetAssayData Assay
 #'
 #' @examples
 #' # Get the data directly from an Assay object
-#' GetTDEseqAssayData(pbmc_small[["RNA"]], slot = "data")[1:5,1:5]
+#' GetAssayData(pbmc_small[["RNA"]], slot = "data")[1:5,1:5]
 #'
-GetTDEseqAssayData.Assay <- function(object,
+GetAssayData.Assay <- function(object,
   slot = c('data', 
 	'scale.data', 
 	'counts',
@@ -960,20 +962,20 @@ GetTDEseqAssayData.Assay <- function(object,
 #'
 #' @rdname AssayData
 #' @export
-#' @method GetTDEseqAssayData TDEseq
+#' @method GetAssayData TDEseq
 #'
 #' @order 3
 #'
 #' @examples
 #' # Get assay data from the default assay in a TDEseq object
-#' GetTDEseqAssayData(object = pbmc_small, slot = "data")[1:5,1:5]
+#' GetAssayData(object = pbmc_small, slot = "data")[1:5,1:5]
 #'
-GetTDEseqAssayData.TDEseq <- function(object, slot = 'data', assay = NULL, ...) {
+GetAssayData.TDEseq <- function(object, slot = 'data', assay = NULL, ...) {
 	assay <- assay %||% DefaultAssay(object = object)
 	if (!assay %in% names(object@assays)) {
 		stop("'", assay, "' is not an assay", call. = FALSE)
 	}## end fi
-	return(GetTDEseqAssayData(object = object@assays[[assay]], slot = slot))
+	return(GetAssayData(object = object@assays[[assay]], slot = slot))
 }## end funcs
 
 #'
@@ -981,14 +983,14 @@ GetTDEseqAssayData.TDEseq <- function(object, slot = 'data', assay = NULL, ...) 
 #' @param slot Specific assay data to get or set
 #' @param ... Arguments passed to other methods
 #'
-#' @return \code{GetTDEseqAssayData}: returns the specified assay data
+#' @return \code{GetAssayData}: returns the specified assay data
 #'
 #' @name AssayData
 #' @rdname AssayData
-#' @export GetTDEseqAssayData
+#' @export GetAssayData
 #'
-GetTDEseqAssayData <- function(object, slot, ...) {
-	UseMethod(generic = 'GetTDEseqAssayData', object = object)
+GetAssayData <- function(object, slot, ...) {
+	UseMethod(generic = 'GetAssayData', object = object)
 }## end func
 
 
@@ -1233,7 +1235,7 @@ CreateObject.Each <- function(counts,
   ## Create assay data
   
   if(!is.null(meta.data)){
-    assay.data <- AddMetaData(assay.data, meta.data = meta.data)
+    assay.data <- AddTDEseqMetaData(assay.data, meta.data = meta.data)
   }## end fi
   
   return(assay.data)
@@ -1332,7 +1334,7 @@ tail.TDEseq <- .tail
 #' \code{j}
 #'
 #' @export
-#' @method [ Assay
+#' @method [Assay
 #'
 #'
 "[.Assay" <- function(x, i, j, ...) {
@@ -1344,7 +1346,7 @@ tail.TDEseq <- .tail
     j <- seq_len(length.out = ncol(x = x))
   }# end fi
   
-  return(GetTDEseqAssayData(object = x)[i, j, ..., drop = FALSE])
+  return(GetAssayData(object = x)[i, j, ..., drop = FALSE])
 }## end funcs
 
 
