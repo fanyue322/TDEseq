@@ -335,7 +335,8 @@ CreateTDEseqObject.default <- function(counts,
                 									row.names = row.names, 
                 									num.core = num.core)
 	assay.data@ident <- idents
-	
+	## add meta.data
+	if(!is.null(meta.data)){assay.data <- AddTDEseqMetaData(assay.data, meta.data = meta.data)}
 	## information proprecess
 	object <- CreateTDEseqObject(counts = assay.data,
 	                               project = project,
@@ -344,8 +345,6 @@ CreateTDEseqObject.default <- function(counts,
 	                               names.delim = names.delim,
 	                               num.core = num.core,...)
 	
-	## add meta.data
-	if(!is.null(meta.data)){object <- AddTDEseqMetaData(object, meta.data = meta.data)}
 	
 	## species for this study
 	object@species <- species
