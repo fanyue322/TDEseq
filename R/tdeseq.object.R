@@ -378,6 +378,8 @@ CreateTDEseqObject.Assay <- function(counts,
 		project.name = project)
 
 	### Calculate library size and number of expressed genes or cells
+	if(is.null(x=counts@meta.data))
+	{
 	metrics <- CalQCMetrics(object = object)
 
 	if (!is.null(x = metrics)) {
@@ -387,7 +389,7 @@ CreateTDEseqObject.Assay <- function(counts,
 		colnames(x = metrics$feature_level) <- paste(colnames(x = metrics$feature_level), assay, sep = '_')
 		object <- SetAssayData(object, slot = "meta.features", new.data = as.data.frame(metrics$feature_level))
 	}## end fi
-	
+	}	
 	## Add metadata
 	return(object)
 }## end funcs
@@ -1411,3 +1413,4 @@ rlang::`%||%`
   }
   return(x)
 }
+
