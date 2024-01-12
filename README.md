@@ -60,7 +60,7 @@ tde_param <- list(sample.var = "batch",
                  fit.model = "lm",
                  tde.thr = 0.05,
                  num.core=10)
-tde <- tdeseq(object = tde, tde.param=tde_param)
+tde <- tdeseq(object = tde, tde.method=tde_method, tde.param=tde_param)
 ```
 Users need to specify which column in the meta.data corresponds to sample and time points information by setiing `sample.var` and `stage.var`. We set `fit.model="lm"` to perform linear version of TDEseq. Uesr can perform mixed version of TDEseq by setting `fit.model="lmm"`.
 
@@ -89,6 +89,19 @@ The results of TDEseq analysis are stored in TDEseqObject. User can obtain the r
 ## Get the results of TDEseq analysis for each gene
 result<-GetTDEseqAssayData(tde,slot='tde')  
 ```
+
+### Pseudocell model
+When the number of cells is large, generating pseudo-cells by aggregating a predifined number of cells (default is 20) will greatly reduce the computational burden. Users can run TDEseq in pseudocell mode by setting `tde_method = "pseudocell"`
+```
+tde_method <- "pseudocell"
+tde_param <- list(sample.var = "batch",
+                 stage.var = "stage",
+                 fit.model = "lm",
+                 tde.thr = 0.05,
+                 num.core=10)
+tde <- tdeseq(object = tde, tde.method=tde_method, tde.param=tde_param)
+```
+
 A tutorial includes main example codes for mouse liver development analysis can be found [here](https://fanyue322.github.io/TDEseq)
 ## Our group
 

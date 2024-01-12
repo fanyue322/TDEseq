@@ -44,7 +44,17 @@ tdeseq.default <- function(object,
                   					num.core = 1, 
                   					verbose = FALSE) {
 	
-
+    if(tde.method == "pseudocell")
+	{	   
+	##*************************************************##
+	##   Performing Temporal DE based on PseudoCell    ##
+	##*************************************************##
+	   obj<-cell_aggregate(object,sample.id,stage.id)
+	   sample.id=obj@meta.data$group
+	   stage.id=obj@meta.data$stage
+	   object=Seurat::GetAssayData(obj,'data')
+       rm(obj)
+	}
 
 	## reordering data ##
 	stage_idx=sort(unique(stage.id))
@@ -138,10 +148,7 @@ tdeseq.default <- function(object,
     
 	
 	## main functions
-	if(tde.method == "cell"){
-	##*************************************************##
-	##   Performing Temporal DE based on Single-Cell   ##
-	##*************************************************##
+
 	  if(verbose) cat("# fitting cell-based TDEseq model ... \n")
 	  basis=list()
 	  basis[[1]]<-basisfunction(x=stage.id,type=1,knots=unique(stage.id),fit.model=fit.model)
@@ -170,37 +177,7 @@ tdeseq.default <- function(object,
 		    }
 		  )
 		})## end parallel
-	}else if(tde.method == "pseudocell"){
-	##*************************************************##
-	##   Performing Temporal DE based on PseudoCell    ##
-	##*************************************************##
-	  if(verbose) cat("# fitting pseudocell-based TDEseq model ... \n")
-	  res.tdeseq <- pbmcapply::pbmclapply(seq_len(num_gene), mc.cores = num.core, function(x){
-	    #for each condition get data as y_data
-	    tryCatch({suppressWarnings(
-	      res <- TDEseq.pseudocell(data = object[x,],
-	                               stage = stage.id,
-	                               group = sample.id,
-	                               z = 0,
-	                               LMM = fit.model,
-	                               pct = pct,
-	                               threshold = tde.thr,
-	                               logFC_threshold = lfc,
-	                               max_cells_per_ident = max.gcells,
-	                               min_cells_per_timepoints = min.tcells,
-								   num.core=num.core)
-	    )
-	    }, warning=function(w){ 
-	      print(w); return(res);
-	    }, error=function(e){
-	      print(e); return(NULL);
-	    }, finally={
-	      #######
-	      return(res)
-	    }
-	    )
-	  })## end parallel
-	}
+
 	
 	
 	res.tdeseq=do.call(c,res.tdeseq)

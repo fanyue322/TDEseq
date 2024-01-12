@@ -6,9 +6,15 @@ N=length(unique(group))
 
 pseudolabel<-lapply(1:N,function(x){
 g=unique(group)[x]
-idx=sample(which(group==g))
+idx=which(group==g)
+if(length(idx)>1)
+{
+idx=sample(idx)
 num=floor(length(idx)/size)+1
 pseudolabel=rep(paste0("pseudocell",1:num,"_",g),each=size)[1:length(idx)]
+}else{
+pseudolabel=rep(paste0("pseudocell",1,"_",g),each=1)
+}
 return(pseudolabel)
 })
 pseudolabel=do.call(c,pseudolabel)
