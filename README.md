@@ -90,7 +90,7 @@ The results of TDEseq analysis are stored in TDEseqObject. User can obtain the r
 result<-GetTDEseqAssayData(tde,slot='tde')  
 ```
 
-### Pseudocell model
+### Pseudocell mode
 When the number of cells is large, generating pseudo-cells by aggregating a predifined number of cells (default is 20) will greatly reduce the computational burden. Users can run TDEseq in pseudocell mode by setting `tde_method = "pseudocell"`
 ```
 tde_method <- "pseudocell"
@@ -101,6 +101,7 @@ tde_param <- list(sample.var = "batch",
                  num.core=10)
 tde <- tdeseq(object = tde, tde.method=tde_method, tde.param=tde_param)
 ```
+Note, to run TDEseq in Pseudocell mode, please first install Seurat package.
 
 A tutorial includes main example codes for mouse liver development analysis can be found [here](https://fanyue322.github.io/TDEseq)
 ## Our group
