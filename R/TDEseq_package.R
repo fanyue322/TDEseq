@@ -1,6 +1,6 @@
 #' @import coneproj
 #' @import sjmisc
-#' @import lme4
+#' @import nlme
 #' @export TDEseq
 NULL
 
