@@ -7,7 +7,7 @@ Maintainer: Yue Fan <xafanyue@xjtu.edu.cn>
 Description: TDEseq is implemented as an open source R package for detecting genes with temporal dynamic expression patterns in time-series scRNA-seq transcriptomic studies. TDEseq models the relationship between log normalized data and the corresponding time points through constrained additive mixed model and can detect the DE genes as well as its temporal dynamic pattern simultaneously.
 License: GPL (>= 2)
 Depends: R(>= 4.0.2)
-Imports: coneproj (>= 1.15), rlang (>= 1.1.1), utils (>= 4.0.3), lme4 (>= 1.1.34), sjmisc (>= 2.8.9)
+Imports: coneproj (>= 1.15), rlang (>= 1.1.1), utils (>= 4.0.3), nlme (>= 3.1.152), sjmisc (>= 2.8.9)
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.2.3

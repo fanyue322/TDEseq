@@ -390,14 +390,15 @@ capm <- length(delta) / n - capms
             # thhat = ansi$root
         # }
 		# }else{
-		mod.lmer = try(mod.lmer0<-lmer(evec~-1+(1|id), REML=TRUE,verbose=0),silent=TRUE)
+	#	 mod.lmer = try(mod.lmer0<-lmer(evec~-1+(1|id), REML=FALSE,verbose=0),silent=TRUE)
+	    mod.lmer = try(mod.lmer0 <- nlme::lme(evec~ 1, random = ~1|id),silent=TRUE) 
 		if(class(mod.lmer)=='try-error')
 		{
 		thhat=0
 		}else{
-		thhat = summary(mod.lmer)$optinfo$val^2
+		thhat = as.numeric(nlme::VarCorr(mod.lmer)[2,1])
 		}
-		#}
+		
 		
 		type = "ub"
 ############update mu gaven a ############		
