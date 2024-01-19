@@ -2,7 +2,7 @@
 % Please edit documentation in R/tdeseq.R
 \name{tdeseq}
 \alias{tdeseq}
-\title{Differential expression analysis for SRT}
+\title{Differential expression analysis for time series scRNA-seq data}
 \usage{
 tdeseq(object, ...)
 }
@@ -12,7 +12,7 @@ tdeseq(object, ...)
 \item{...}{Arguments passed to other methods}
 }
 \description{
-Differential expression analysis for SRT
+Differential expression analysis for time series scRNA-seq data
 }
 \examples{
 tdeseq(object)

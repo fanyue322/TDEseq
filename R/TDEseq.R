@@ -20,6 +20,7 @@
 #' @param lfc Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.
 #' @param max.gcells Maximum cell per group. If max.gcells is smaller than the given number of cells in each group, the down-sampling will be active. 
 #' @param min.tcells Minimum number of cells in each time points required. 
+#' @param mod.uniroot Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.  
 #' @param tdeseq.method Performing 'cell' or 'pseudocell' strategy. Default is 'cell'.
 #' 
 #' 
@@ -41,6 +42,7 @@ tdeseq.default <- function(object,
                   					lfc = 0.0,
                   					max.gcells = Inf,
                   					min.tcells = 3,
+									mod.uniroot=FALSE,
                   					num.core = 1, 
                   					verbose = FALSE) {
 	
@@ -228,6 +230,7 @@ tdeseq.default <- function(object,
 #' @param lfc Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.
 #' @param max.gcells Maximum cell per group. If max.gcells is smaller than the given number of cells in each group, the down-sampling will be active. 
 #' @param min.tcells Minimum number of cells in each time points required. 
+#' @param mod.uniroot Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.  
 #' @param tdeseq.method Performing 'cell' or 'pseudocell' strategy. Default is 'cell'.
 #' 
 #' @method TDEseq TDEseq
@@ -252,7 +255,8 @@ tdeseq.Assay <- function(object,
                         	                 tde.thr = 0.05,
                         	                 lfc = 0.0,
                         	                 max.gcells = Inf,
-                        	                 min.tcells = 3),
+                        	                 min.tcells = 3,
+											 mod.uniroot=FALSE),
                         	num.core = 1,
                         	verbose = TRUE, ...) {
 	
@@ -317,6 +321,7 @@ tdeseq.Assay <- function(object,
 #' @param lfc Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.
 #' @param max.gcells Maximum cell per group. If max.gcells is smaller than the given number of cells in each group, the down-sampling will be active. 
 #' @param min.tcells Minimum number of cells in each time points required. 
+#' @param mod.uniroot Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.  
 #' @param tdeseq.method Performing 'cell' or 'pseudocell' strategy. Default is 'cell'.
 #' 
 #' @return object An TDEseq object
@@ -329,6 +334,7 @@ tdeseq.Assay <- function(object,
 #' 
 #' @export
 #' 
+
 tdeseq.TDEseq <- function(object, 
                             assay = 'RNA',
                             slot.use = "data",
@@ -341,7 +347,8 @@ tdeseq.TDEseq <- function(object,
                                              tde.thr = 0.05,
                                              lfc = 0.0,
                                              max.gcells = Inf,
-                                             min.tcells = 3),
+                                             min.tcells = 3,
+											 mod.uniroot=FALSE),
                             num.core = 1,
                             verbose = TRUE, ...) {
 	
@@ -369,7 +376,7 @@ tdeseq.TDEseq <- function(object,
 }## end func
 
 
-#' Differential expression analysis for SRT
+#' Differential expression analysis for time series scRNA-seq data
 #' @param object An object
 #' @param ... Arguments passed to other methods
 #'
@@ -438,7 +445,8 @@ TDEseq.cell<-function(data,
 					  group,
 					  z=0,
 					  fit.model='lmm',
-                      basis=basis)
+                      basis=basis,
+					  mod.uniroot=FALSE)
 {
 if(fit.model!='lmm')
 {
@@ -462,10 +470,10 @@ cout=cout+1
 group=as.numeric(group_numeric)
 
 
-fit.incr<-conespline_lmm(y=data,x=stage,basis=basis[[1]],group,shape=9)
-fit.decr<-conespline_lmm(y=data,x=stage,basis=basis[[2]],group,shape=10)
-fit.conv<-conespline_lmm(y=data,x=stage,basis=basis[[3]],group,shape=11)
-fit.conc<-conespline_lmm(y=data,x=stage,basis=basis[[4]],group,shape=12)
+fit.incr<-conespline_lmm(y=data,x=stage,basis=basis[[1]],group,shape=9,mod.uniroot=mod.uniroot)
+fit.decr<-conespline_lmm(y=data,x=stage,basis=basis[[2]],group,shape=10,mod.uniroot=mod.uniroot)
+fit.conv<-conespline_lmm(y=data,x=stage,basis=basis[[3]],group,shape=11,mod.uniroot=mod.uniroot)
+fit.conc<-conespline_lmm(y=data,x=stage,basis=basis[[4]],group,shape=12,mod.uniroot=mod.uniroot)
 
 
 

@@ -11,7 +11,7 @@
   features = NULL,
   tde.method = "cell",
   tde.param = list(sample.var = "group", stage.var = "stage", fit.model = "lmm", pct =
-    0.1, tde.thr = 0.05, lfc = 0, max.gcells = Inf, min.tcells = 3),
+    0.1, tde.thr = 0.05, lfc = 0, max.gcells = Inf, min.tcells = 3, mod.uniroot = FALSE),
   num.core = 1,
   verbose = TRUE,
   ...
@@ -31,6 +31,8 @@
 \item{max.gcells}{Maximum cell per group. If max.gcells is smaller than the given number of cells in each group, the down-sampling will be active.}
 
 \item{min.tcells}{Minimum number of cells in each time points required.}
+
+\item{mod.uniroot}{Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.}
 
 \item{tdeseq.method}{Performing 'cell' or 'pseudocell' strategy. Default is 'cell'.}
 }

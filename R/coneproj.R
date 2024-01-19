@@ -283,7 +283,7 @@ conspline<-function(y,x,basis,type,zmat = 0, wt=0, test=TRUE, c=1.2, nsim=10000)
 
 
 ############LMM function########################
-conespline_lmm<-function(x,y,basis,group,shape=9,test=TRUE,nsim=100)
+conespline_lmm<-function(x,y,basis,group,shape=9,test=TRUE,nsim=100,mod.uniroot=mod.uniroot)
 { ## adjust
     bigmat=basis$bigmat
 	mdist=basis$mdist
@@ -381,15 +381,15 @@ capm <- length(delta) / n - capms
 		ecl = f_ecl(evec, ncl, szs)  ## residuals by group
         mod.lmer = NULL
 
-		# if(core.num==1)
-		# {
-		# ansi = try(ansi0<-uniroot(fth2rm, c(1e-10, 1e+3), szs=szs, ycl=ecl, N=n, xcl=xms, p=edf, type='ub', xtx=xtx, xtx2=xtx2, xmat_face=dd, ones=ones), silent=TRUE)
-        # if (class(ansi) == "try-error") {
-            # thhat = 0
-        # } else {
-            # thhat = ansi$root
-        # }
-		# }else{
+		if(mod.uniroot)
+		{
+		ansi = try(ansi0<-uniroot(fth2rm, c(1e-10, 1e+3), szs=szs, ycl=ecl, N=n, xcl=xms, p=edf, type='ub', xtx=xtx, xtx2=xtx2, xmat_face=dd, ones=ones), silent=TRUE)
+        if (class(ansi) == "try-error") {
+            thhat = 0
+        } else {
+            thhat = ansi$root
+        }
+		}else{
 	#	 mod.lmer = try(mod.lmer0<-lmer(evec~-1+(1|id), REML=FALSE,verbose=0),silent=TRUE)
 	    mod.lmer = try(mod.lmer0 <- nlme::lme(evec~ 1, random = ~1|id),silent=TRUE) 
 		if(class(mod.lmer)=='try-error')
@@ -397,6 +397,7 @@ capm <- length(delta) / n - capms
 		thhat=0
 		}else{
 		thhat = as.numeric(nlme::VarCorr(mod.lmer)[2,1])
+		}
 		}
 		
 		
