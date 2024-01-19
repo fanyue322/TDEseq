@@ -374,6 +374,9 @@ fsig = function(thhat, szs, ycl, ncl, N, edf, D, type='b') {
 
 LogLSFactor<-function(data, scale_factor = scale.factor,num.core=1)
 {
+    lib.sizes <- colSums(data)
+	lib.sizes <- lib.sizes/mean(lib.sizes)
+	data <- data/lib.sizes
     res<-pbmcapply::pbmclapply(1:ncol(data), mc.cores = num.core, function(x){
     tryCatch({suppressWarnings(
     res<-normalizedata(d=data[,x],scale_factor=scale_factor)
@@ -396,8 +399,7 @@ LogLSFactor<-function(data, scale_factor = scale.factor,num.core=1)
 	
 normalizedata<-function(d,scale_factor)
 {
-dsum=sum(d)
-d=log(d/dsum*scale_factor+1)
+d<-log2(d+1)
 return(d)
 }
 
