@@ -214,9 +214,14 @@ tdeseq.default <- function(object,
     }
     dfTDEseqResults$ChangePoint<-ChangePoint
 	
+	fit.inc <- do.call(cbind,res.tdeseq[seq(2,length(res.tdeseq),9)])
+	fit.dec <- do.call(cbind,res.tdeseq[seq(3,length(res.tdeseq),9)])
+	fit.cov <- do.call(cbind,res.tdeseq[seq(4,length(res.tdeseq),9)])
+	fit.con <- do.call(cbind,res.tdeseq[seq(5,length(res.tdeseq),9)])
 	
-	
-	return(dfTDEseqResults)
+	ModelFits<-GetModelFits(dfTDEseqResults,list(fit.inc,fit.dec,fit.cov,fit.con),stage.id)
+	out<-list(dfTDEseqResults=dfTDEseqResults,ModelFits=ModelFits)
+	return(out)
 }## end function 
 
 
@@ -307,7 +312,9 @@ tdeseq.Assay <- function(object,
 					
 
 	## store the scaled data in the slot
-	object <- SetAssayData(object = object, slot = 'tde', new.data = new.data)
+	object <- SetAssayData(object = object, slot = 'tde', new.data = new.data$dfTDEseqResults)
+	object <- SetAssayData(object = object, slot = 'fit', new.data = new.data$ModelFits)
+	return(object)
 	## store top number of features in tde slot
 }## end func
 

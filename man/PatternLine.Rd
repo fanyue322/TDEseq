@@ -7,9 +7,9 @@
 PatternLine(obj, feature.show = NULL, cols = NULL)
 }
 \arguments{
-\item{seuobj}{A seurat object with UMAP embeddings been calculated}
+\item{tdeobj}{A tdeseq object}
 
-\item{features}{Genes to be shown in feature plot}
+\item{features}{Genes to be shown in line plot}
 }
 \description{
 PatternLine: Line plot to show the pattern specific temporal genes. Please first install ggplot2.

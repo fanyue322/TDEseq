@@ -191,6 +191,23 @@ combined_pvalue <- unlist(lapply(res, ComputeACAT))
 return(combined_pvalue)
 }
 
+GetModelFits<-function(res_dat,res,stage)
+{
+sig_gene_idx=which(res_dat$SignificantDE=='Yes')
+ModelFits=matrix(0,nrow=length(sig_gene_idx),ncol=length(unique(stage)))
+rownames(ModelFits)=res_dat$gene[sig_gene_idx]
+colnames(ModelFits)=sort(unique(stage))
+pattern=c('Growth','Recession','Trough','Peak')
+for(i in sig_gene_idx)
+{
+for(j in sort(unique(stage)))
+{
+ModelFits[res_dat$gene[i],j+1]=mean(res[[match(res_dat$pattern[i],pattern)]][which(stage==j),i])
+}
+}
+return(ModelFits)
+}
+
 
 ComputeACAT <- function(Pvals, Weights=NULL){
  #### check if there is NA
