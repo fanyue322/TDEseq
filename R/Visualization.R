@@ -16,13 +16,13 @@ suppressPackageStartupMessages(library("Seurat"))
 suppressPackageStartupMessages(library("ggplot2"))
 suppressPackageStartupMessages(library("ComplexHeatmap"))
 suppressPackageStartupMessages(library("circlize"))
-data.norm<-GetTDEseqAssayData(tde,'data')
+data.norm<-GetTDEseqAssayData(obj,'data')
 seu<-CreateSeuratObject(data.norm)
 seu@assays$RNA@data<-data.norm
 seu<-ScaleData(seu)
 mat <- GetAssayData(seu,slot = 'scale.data')
-metadata <- GetTDEseqAssayData(tde,'meta.data')
-res_dat=GetTDEseqAssayData(tde,'tde')
+metadata <- GetTDEseqAssayData(obj,'meta.data')
+res_dat=GetTDEseqAssayData(obj,'tde')
 res_dat=res_dat[order(res_dat$pvalue),]
 feature_annot=c()
 if(is.null(features))
@@ -164,8 +164,8 @@ PatternLine<-function (obj, feature.show = NULL, cols = NULL)
 	stop(paste0("Genes to be shown are not specified!!"))
 	}
 	
-    dat = dat[feature.show, ]
 	time=as.numeric(colnames(dat))
+    dat = dat[feature.show, ]
     
 	N=length(feature.show)
 	if(N!=1)
