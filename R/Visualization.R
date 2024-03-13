@@ -17,10 +17,7 @@ suppressPackageStartupMessages(library("ggplot2"))
 suppressPackageStartupMessages(library("ComplexHeatmap"))
 suppressPackageStartupMessages(library("circlize"))
 data.norm<-GetTDEseqAssayData(obj,'data')
-seu<-CreateSeuratObject(data.norm)
-seu@assays$RNA@data<-data.norm
-seu<-ScaleData(seu)
-mat <- GetAssayData(seu,slot = 'scale.data')
+mat<-Seurat::ScaleData(data.norm)
 metadata <- GetTDEseqAssayData(obj,'meta.data')
 res_dat=GetTDEseqAssayData(obj,'tde')
 res_dat=res_dat[order(res_dat$pvalue),]
