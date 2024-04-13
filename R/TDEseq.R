@@ -59,13 +59,15 @@ tdeseq.default <- function(object,
 	}
 
 	## reordering data ##
-	stage_idx=sort(unique(stage.id))
-	stage_origin=stage.id
+	stage_idx<-sort(unique(stage.id))
+	stage_origin<-stage.id
+	
+	stage.id<-rep(0,length(stage_origin))
 	
 	points_order=0
     for(i in stage_idx)
     {
-    stage.id[which(stage.id==i)]=points_order
+    stage.id[which(stage_origin==i)]=points_order
     points_order=points_order+1
     }
 
@@ -188,7 +190,7 @@ tdeseq.default <- function(object,
 	dfTDEseqResults$pvalue=p
 	rownames(dfTDEseqResults)=genes.use
 	dfTDEseqResults$gene=rownames(dfTDEseqResults)
-    dfTDEseqResults$padj=p.adjust(p,method='BY')
+    dfTDEseqResults$padj=p.adjust(p,method='fdr')
 	dfTDEseqResults$SignificantDE='No'
     dfTDEseqResults$SignificantDE[which(dfTDEseqResults$padj<tde.thr)]='Yes'
 	dfTDEseqResults$pattern='None'
