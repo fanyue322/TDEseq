@@ -59,7 +59,7 @@ tde_param <- list(sample.var = "batch",
                  stage.var = "stage",
                  fit.model = "lm",
                  tde.thr = 0.05)
-tde <- tdeseq(object = tde, tde.method=tde_method, tde.param=tde_param，num.core=1)
+tde <- tdeseq(object = tde, tde.method=tde_method, tde.param=tde_param, num.core=1)
 ```
 Users need to specify which column in the meta.data corresponds to sample and time points information by setiing `sample.var` and `stage.var`. We set `fit.model="lm"` to perform linear version of TDEseq. Uesr can perform mixed version of TDEseq by setting `fit.model="lmm"`.
 
