@@ -58,9 +58,8 @@ tde_method <- "cell"
 tde_param <- list(sample.var = "batch",
                  stage.var = "stage",
                  fit.model = "lm",
-                 tde.thr = 0.05,
-                 num.core=10)
-tde <- tdeseq(object = tde, tde.method=tde_method, tde.param=tde_param)
+                 tde.thr = 0.05)
+tde <- tdeseq(object = tde, tde.method=tde_method, tde.param=tde_param，num.core=1)
 ```
 Users need to specify which column in the meta.data corresponds to sample and time points information by setiing `sample.var` and `stage.var`. We set `fit.model="lm"` to perform linear version of TDEseq. Uesr can perform mixed version of TDEseq by setting `fit.model="lmm"`.
 
@@ -74,9 +73,8 @@ tde_param <- list(sample.var = "batch",
                  tde.thr = 0.05,
                  lfc = 0.1,
                  max.gcells = Inf,
-                 min.tcells = 3,
-		 num.core=10)
-tde <- tdeseq(object = tde, tde.param=tde_param)
+                 min.tcells = 3)
+tde <- tdeseq(object = tde, tde.param=tde_param,num.core=1)
 ```
 1. Remove time points with too few cells by setting `min.tcells`. Here, time points with less than 3 cells will be removed.
 2. Filter genes that are only expressed in a few cells by setting `pct`. Here, genes with more than 90% of zero counts will be filtered out.
@@ -97,8 +95,7 @@ tde_method <- "pseudocell"
 tde_param <- list(sample.var = "batch",
                  stage.var = "stage",
                  fit.model = "lm",
-                 tde.thr = 0.05,
-                 num.core=10)
+                 tde.thr = 0.05)
 tde <- tdeseq(object = tde, tde.method=tde_method, tde.param=tde_param)
 ```
 Note, to run TDEseq in Pseudocell mode, please first install Seurat package.
