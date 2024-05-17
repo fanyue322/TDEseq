@@ -11,7 +11,7 @@
   features = NULL,
   tde.method = "cell",
   tde.param = list(sample.var = "group", stage.var = "stage", fit.model = "lmm", pct =
-    0.1, tde.thr = 0.05, lfc = 0, max.gcells = Inf, min.tcells = 3, mod.uniroot = FALSE),
+    0.1, tde.thr = 0.05, lfc = 0, max.gcells = Inf, min.tcells = 3, mod = "FastLMM"),
   num.core = 1,
   verbose = TRUE,
   ...
@@ -32,7 +32,7 @@
 
 \item{min.tcells}{Minimum number of cells in each time points required.}
 
-\item{mod.uniroot}{Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.}
+\item{mod}{Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.}
 
 \item{tdeseq.method}{Performing 'cell' or 'pseudocell' strategy. Default is 'cell'.}
 }

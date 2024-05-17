@@ -15,7 +15,7 @@
   lfc = 0,
   max.gcells = Inf,
   min.tcells = 3,
-  mod.uniroot = FALSE,
+  mod = "FastLMM",
   num.core = 1,
   verbose = FALSE
 )
@@ -37,7 +37,7 @@
 
 \item{min.tcells}{Minimum number of cells in each time points required.}
 
-\item{mod.uniroot}{Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.}
+\item{mod}{Variance component estimation is done either by a linear mixed model implemented in the nlme package(nlme) uniroot, or FastLMM. The uniroot estimation is much more accurate but very time consuming, FastLMM mod is recommended.}
 
 \item{fit.method}{Either 'lmm' or 'lm' to perform (default = lmm).}
 
