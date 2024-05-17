@@ -68,18 +68,20 @@ User can set other parameters to perform some preprocessing steps. This paramete
 ```
 tde_param <- list(sample.var = "batch",
                  stage.var = "stage",
-                 fit.model = "lm",
+                 fit.model = "lmm",
                  pct = 0.1,
                  tde.thr = 0.05,
                  lfc = 0.1,
                  max.gcells = Inf,
-                 min.tcells = 3)
+                 min.tcells = 3,
+				 mod = 'FastLMM')
 tde <- tdeseq(object = tde, tde.param=tde_param,num.core=1)
 ```
 1. Remove time points with too few cells by setting `min.tcells`. Here, time points with less than 3 cells will be removed.
 2. Filter genes that are only expressed in a few cells by setting `pct`. Here, genes with more than 90% of zero counts will be filtered out.
 3. Filter genes that show small average X-fold difference (log-scale) between any two time points by setting `lfc`. Here, we limit testing to genes which show at least 0.1-fold difference between any two time points.
 4. Downsample cells by setting `max.gcells`. If max.gcells is smaller than the given number of cells in a sample, the down-sampling will be active. Here, we do not perform downsampling by setting `max.gcells=Inf`.
+5. Variance component estimation by setting `mod`. We strongly recommend using `FastLMM` mod, which will estimate random effects efficient and accurate.
 
 ### Get results
 The results of TDEseq analysis are stored in TDEseqObject. User can obtain the results by

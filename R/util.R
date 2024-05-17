@@ -423,7 +423,85 @@ return(d)
 
 
 
+FastLMM<-function(y,z,eiglist,szs,ncl)		
+{
+
+ytil=c()
+gtil=c()
+ycl = f_ecl(y, ncl, szs) 
+zcl = f_ecl(z,ncl,szs)
+K_eta_all=c()
+for (icl in 1:ncl) {
+	ytil=c(ytil,t(eiglist[[icl]]$vectors)%*%ycl[[icl]])
+	gtil=c(gtil,t(eiglist[[icl]]$vectors)%*%zcl[[icl]])
+	K_eta_all=c(K_eta_all,eiglist[[icl]]$values)
+}
+			
+h2=c()
+loglik=c()
+ 
+        interval=c(0,1)
+        res<-optimize(likelihood, interval,y_t=ytil,x_t=gtil,K_eta=K_eta_all,maximum=TRUE)
+        loglik=c(loglik,res$objective)
+        h2=c(h2,res$maximum)
+
+		idx=which(loglik==max(loglik))
+        h2=h2[idx]
+        sigma<-sigma_delta(h2,gtil,ytil,K_eta_all)
+return(list(h2=h2,sigma=sigma))
+}
+
+inv_H<-function(theta,K_eta)
+{
+  z=diag(1/(K_eta*theta+1-theta))
+  return(z)
+}
 
 
+exp_sum<-function(theta,y_t,x_t,K_eta)
+{
+  z=(y_t-x_t*as.numeric(beta_delta(theta,x_t,y_t,K_eta)))^2/(K_eta+(1-theta)/theta)
+  return(sum(z))
+}
 
+beta_delta<-function(theta,x_t,y_t,K_eta)
+{
+  ((t(x_t)*(1/(K_eta*theta+1-theta)))%*%y_t)/((t(x_t)*(1/(K_eta*theta+1-theta)))%*%x_t)
+}
+
+
+sigma_delta<-function(theta,x_t,y_t,K_eta)
+{
+  n=length(y_t)
+  1/n*(t(y_t-x_t*as.numeric(beta_delta(theta,x_t,y_t,K_eta)))*(1/(K_eta*theta+1-theta)))%*%(y_t-x_t*as.numeric(beta_delta(theta,x_t,y_t,K_eta)))
+}
+
+likelihood<-function(theta,y_t,x_t,K_eta)
+{
+  n=length(y_t)
+  -0.5*(n*log(2*pi)+sum(log(K_eta+(1-theta)/theta))+n+n*log(1/n*exp_sum(theta,y_t,x_t,K_eta)))                          #slow but simple
+}
+
+Generate_Kmatrix<-function(szs)
+{
+eiglist=list()
+for(i in 1:length(szs))
+{
+K=matrix(1,nrow=szs[i],ncol=szs[i])
+eig=eigen(K)
+eiglist[[i]]=eig
+}
+
+return(eiglist)
+}
+
+
+row.multiple<-function(matrix,value)
+{
+for(i in 1:ncol(matrix))
+{
+matrix[,i]=matrix[,i]*value[i]
+}
+return(matrix)
+}
 

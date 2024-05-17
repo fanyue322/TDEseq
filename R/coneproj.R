@@ -283,7 +283,8 @@ conspline<-function(y,x,basis,type,zmat = 0, wt=0, test=TRUE, c=1.2, nsim=10000)
 
 
 ############LMM function########################
-conespline_lmm<-function(x,y,basis,group,shape=9,test=TRUE,nsim=100,mod.uniroot=mod.uniroot)
+############LMM function########################
+conespline_lmm<-function(x,y,basis,group,shape=9,test=TRUE,eiglist=NULL,nsim=100,mod='FastLMM')
 { ## adjust
     bigmat=basis$bigmat
 	mdist=basis$mdist
@@ -358,7 +359,8 @@ capm <- length(delta) / n - capms
 		xms = ones = list()
         st = 1
         ed = 0
-		
+	if(mod!='FastLMM')
+    {	
 		for (icl in 1:ncl) {
             sz = szs[icl]
             ed = ed + sz
@@ -368,7 +370,7 @@ capm <- length(delta) / n - capms
             ones[[icl]] = onemat
             st = ed + 1
         }
-		
+		}
 		muhat = t(bigmat) %*% bh
 		oldmu = muhat
 #########update mu and sigma iterately##########		
@@ -378,10 +380,13 @@ capm <- length(delta) / n - capms
 		
 		nrep = nrep + 1
 		evec = y - muhat    ##residuals a+e
+		
+		
+		
 		ecl = f_ecl(evec, ncl, szs)  ## residuals by group
         mod.lmer = NULL
 
-		if(mod.uniroot)
+		if(mod == 'uniroot')
 		{
 		ansi = try(ansi0<-uniroot(fth2rm, c(1e-10, 1e+3), szs=szs, ycl=ecl, N=n, xcl=xms, p=edf, type='ub', xtx=xtx, xtx2=xtx2, xmat_face=dd, ones=ones), silent=TRUE)
         if (class(ansi) == "try-error") {
@@ -389,7 +394,7 @@ capm <- length(delta) / n - capms
         } else {
             thhat = ansi$root
         }
-		}else{
+		}else if(mod == 'nlme'){
 	#	 mod.lmer = try(mod.lmer0<-lmer(evec~-1+(1|id), REML=FALSE,verbose=0),silent=TRUE)
 	    mod.lmer = try(mod.lmer0 <- nlme::lme(evec~ 1, random = ~1|id),silent=TRUE) 
 		if(class(mod.lmer)=='try-error')
@@ -398,16 +403,20 @@ capm <- length(delta) / n - capms
 		}else{
 		thhat = as.numeric(nlme::VarCorr(mod.lmer)[2,1])
 		}
+		}else if(mod == 'FastLMM'){
+		thhat = try(ansi0 <- FastLMM(y=evec, z=zsend,eiglist=eiglist,szs=szs,ncl=ncl))		
 		}
 		
 		
 		type = "ub"
 ############update mu gaven a ############		
-	ytil = NULL 
+	        ytil = NULL 
 #gtil is edges
 			gtil = NULL
 			st = 1
 			ed = 0
+    if(mod!='FastLMM')
+	{
 			sz = max(szs)
             pos = which(szs == sz)[1]
             oneMat = ones[[pos]]
@@ -427,6 +436,18 @@ capm <- length(delta) / n - capms
 				gtil = rbind(gtil, uinv %*% gmat[st:ed, ,drop=F])
 				st = ed + 1
 			}
+	}else{
+
+		    for (icl in 1:ncl) {
+		    uinv0 = row.multiple(eiglist[[icl]]$vectors,sqrt((1/(eiglist[[icl]]$values*thhat$h2+1*(1-thhat$h2)))))
+		    ytil=c(ytil, ycl[[icl]]%*%uinv0) 
+            ed = ed+szs[icl]
+            gtil = cbind(gtil, t(gmat[st:ed, ,drop=F])%*%uinv0)
+		    st = ed + 1
+	        }
+			gtil=t(gtil)
+	}
+
 			#####weighted coneB #########
 			dsend = gtil[, (np + 1):(np + capm), drop = FALSE]
             zsend = gtil[, 1:np, drop = FALSE]
@@ -454,9 +475,16 @@ capm <- length(delta) / n - capms
                 }
 			}
 		ebars = sapply(ecl, mean)
+		if(mod!='FastLMM')
+		{
 		sig2hat = fsig(thhat, szs, ecl, ncl, N=n, edf=edf, D=nrow(bigmat), type=type)
 		siga2hat = sig2hat * thhat 
 		ahat = ebars*szs*thhat/(1+szs*thhat)
+		}else{
+		sig2hat = thhat$sigma * (1-thhat$h2)
+		siga2hat = thhat$sigma * thhat$h2
+		ahat = ebars * szs * (thhat$h2/(1-thhat$h2)) / (1 + szs * (thhat$h2/(1-thhat$h2)) )
+		}
 	#################testing####################
 	if(test)
 	{
@@ -464,6 +492,8 @@ capm <- length(delta) / n - capms
 	        gtil = NULL
 			st = 1
 			ed = 0
+			if(mod != 'FastLMM')
+			{
 			sz = max(szs)
             pos = which(szs == sz)[1]
             oneMat = ones[[pos]]
@@ -484,6 +514,19 @@ capm <- length(delta) / n - capms
 				st = ed + 1
 			}
 			#####weighted coneB #########
+			}else{
+			
+			for (icl in 1:ncl) {
+		    uinv0 = row.multiple(eiglist[[icl]]$vectors,sqrt((1/(eiglist[[icl]]$values*thhat$h2+1*(1-thhat$h2)))))
+		    ytil=c(ytil, ycl[[icl]]%*%uinv0) 
+            ed = ed+szs[icl]
+            gtil = cbind(gtil, t(gmat[st:ed, ,drop=F])%*%uinv0)
+		    st = ed + 1
+	        }
+			gtil=t(gtil)
+			
+			
+			}
 			dsend = gtil[, (np + 1):(np + capm), drop = FALSE]
             zsend = gtil[, 1:np, drop = FALSE]
 			yhat=gtil%*%bh                                                    #34.20664
@@ -509,6 +552,11 @@ capm <- length(delta) / n - capms
 		}
 		pval=1-ps
     }
+	if(mod!='FastLMM')
+	{
 	rslt = list(muhat = muhat,  bh = bh,ahat = ahat, sig2hat = sig2hat, siga2hat = siga2hat, thhat = thhat, bigmat = bigmat,pval=pval,bstat=bstat)
+	}else{
+	rslt = list(muhat = muhat,  bh = bh,ahat = ahat, sig2hat = sig2hat, siga2hat = siga2hat, thhat = thhat$h2/(1-thhat$h2), bigmat = bigmat,pval=pval,bstat=bstat)
+	}
     return (rslt)
 }

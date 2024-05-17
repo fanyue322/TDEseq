@@ -20,7 +20,7 @@
 #' @param lfc Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.
 #' @param max.gcells Maximum cell per group. If max.gcells is smaller than the given number of cells in each group, the down-sampling will be active. 
 #' @param min.tcells Minimum number of cells in each time points required. 
-#' @param mod.uniroot Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.  
+#' @param mod Variance component estimation is done either by a linear mixed model implemented in the nlme package(nlme) uniroot, or FastLMM. The uniroot estimation is much more accurate but very time consuming, FastLMM mod is recommended.  
 #' @param tdeseq.method Performing 'cell' or 'pseudocell' strategy. Default is 'cell'.
 #' 
 #' 
@@ -42,7 +42,7 @@ tdeseq.default <- function(object,
                   					lfc = 0.0,
                   					max.gcells = Inf,
                   					min.tcells = 3,
-									mod.uniroot=FALSE,
+									mod = "FastLMM",
                   					num.core = 1, 
                   					verbose = FALSE) {
 	
@@ -135,6 +135,13 @@ tdeseq.default <- function(object,
     maxFC=maxFC[idx]
     }
     
+	if(mod == 'FastLMM')
+	{
+	szs = unname(table(sample.id))
+	szs = szs[szs!=0]
+	eiglist = Generate_Kmatrix(szs)
+	}
+	
 	## number of cells and genes
 	num_cell <- ncol(object)
 	num_gene <- nrow(object)
@@ -149,7 +156,6 @@ tdeseq.default <- function(object,
 	cat(paste("## ===== END INFORMATION ==== \n"))
 	cat("\n")
 	
-    
 	
 	## main functions
 
@@ -169,7 +175,8 @@ tdeseq.default <- function(object,
 		                       group = sample.id,
 		                       z = 0,
 		                       fit.model = fit.model,
-		                       basis=basis)
+		                       basis=basis,
+							   eiglist = eiglist)
 		      )
 		    }, warning=function(w){ 
 		      print(w); return(res);
@@ -237,7 +244,7 @@ tdeseq.default <- function(object,
 #' @param lfc Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.
 #' @param max.gcells Maximum cell per group. If max.gcells is smaller than the given number of cells in each group, the down-sampling will be active. 
 #' @param min.tcells Minimum number of cells in each time points required. 
-#' @param mod.uniroot Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.  
+#' @param mod Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.  
 #' @param tdeseq.method Performing 'cell' or 'pseudocell' strategy. Default is 'cell'.
 #' 
 #' @method TDEseq TDEseq
@@ -263,7 +270,7 @@ tdeseq.Assay <- function(object,
                         	                 lfc = 0.0,
                         	                 max.gcells = Inf,
                         	                 min.tcells = 3,
-											 mod.uniroot=FALSE),
+											 mod='FastLMM'),
                         	num.core = 1,
                         	verbose = TRUE, ...) {
 	
@@ -330,7 +337,7 @@ tdeseq.Assay <- function(object,
 #' @param lfc Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.
 #' @param max.gcells Maximum cell per group. If max.gcells is smaller than the given number of cells in each group, the down-sampling will be active. 
 #' @param min.tcells Minimum number of cells in each time points required. 
-#' @param mod.uniroot Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.  
+#' @param mod Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.  
 #' @param tdeseq.method Performing 'cell' or 'pseudocell' strategy. Default is 'cell'.
 #' 
 #' @return object An TDEseq object
@@ -357,7 +364,7 @@ tdeseq.TDEseq <- function(object,
                                              lfc = 0.0,
                                              max.gcells = Inf,
                                              min.tcells = 3,
-											 mod.uniroot=FALSE),
+											 mod='FastLMM'),
                             num.core = 1,
                             verbose = TRUE, ...) {
 	
@@ -455,7 +462,8 @@ TDEseq.cell<-function(data,
 					  z=0,
 					  fit.model='lmm',
                       basis=basis,
-					  mod.uniroot=FALSE)
+					  mod='FastLMM',
+					  eiglist=NULL)
 {
 if(fit.model!='lmm')
 {
@@ -479,10 +487,10 @@ cout=cout+1
 group=as.numeric(group_numeric)
 
 
-fit.incr<-conespline_lmm(y=data,x=stage,basis=basis[[1]],group,shape=9,mod.uniroot=mod.uniroot)
-fit.decr<-conespline_lmm(y=data,x=stage,basis=basis[[2]],group,shape=10,mod.uniroot=mod.uniroot)
-fit.conv<-conespline_lmm(y=data,x=stage,basis=basis[[3]],group,shape=11,mod.uniroot=mod.uniroot)
-fit.conc<-conespline_lmm(y=data,x=stage,basis=basis[[4]],group,shape=12,mod.uniroot=mod.uniroot)
+fit.incr<-conespline_lmm(y=data,x=stage,basis=basis[[1]],group,shape=9,eiglist=eiglist,mod=mod)
+fit.decr<-conespline_lmm(y=data,x=stage,basis=basis[[2]],group,shape=10,eiglist=eiglist,mod=mod)
+fit.conv<-conespline_lmm(y=data,x=stage,basis=basis[[3]],group,shape=11,eiglist=eiglist,mod=mod)
+fit.conc<-conespline_lmm(y=data,x=stage,basis=basis[[4]],group,shape=12,eiglist=eiglist,mod=mod)
 
 
 
@@ -493,18 +501,6 @@ return(results)
 
 }
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
