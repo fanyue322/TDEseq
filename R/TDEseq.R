@@ -137,6 +137,7 @@ tdeseq.default <- function(object,
     
 	if(mod == 'FastLMM')
 	{
+	sample.id=factor(sample.id,levels=unique(sample.id))
 	szs = unname(table(sample.id))
 	szs = szs[szs!=0]
 	eiglist = Generate_Kmatrix(szs)
