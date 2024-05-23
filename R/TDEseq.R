@@ -45,6 +45,22 @@ tdeseq.default <- function(object,
 									mod = "FastLMM",
                   					num.core = 1, 
                   					verbose = FALSE) {
+
+    ## filtering time points ##
+    num_cell_per_timepoints=table(stage.id)
+    idx=names(num_cell_per_timepoints)[which(num_cell_per_timepoints<min.tcells)]
+    if(length(idx)>0)
+    {
+    for(i in idx)
+    {
+    object=object[,-which(stage.id==i)]
+    if(!is.null(sample.id))
+    {
+    sample.id=sample.id[-which(stage.id==i)]
+    }
+    stage.id=stage.id[-which(stage.id==i)]
+    }
+    }
 	
     if(tde.method == "pseudocell")
 	{	   
@@ -58,6 +74,7 @@ tdeseq.default <- function(object,
        rm(obj)
 	}
 
+	
 	## reordering data ##
 	stage_idx<-sort(unique(stage.id))
 	stage_origin<-stage.id
@@ -80,21 +97,6 @@ tdeseq.default <- function(object,
     sample.id=sample.id[reorder_idx]
     } 
 	
-	## filtering time points ##
-	num_cell_per_timepoints=table(stage.id)
-	idx=names(num_cell_per_timepoints)[which(num_cell_per_timepoints<min.tcells)]
-	if(length(idx)>0)
-    {
-    for(i in idx)
-    {
-    object=object[,-which(stage.id==i)]
-    if(!is.null(sample.id))
-    {
-    sample.id=sample.id[-which(stage.id==i)]
-    }
-    stage.id=stage.id[-which(stage.id==i)]
-    }
-    }
 	
 	##  downsampling  ##
 	if(is.null(max.gcells))
