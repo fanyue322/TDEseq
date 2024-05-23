@@ -135,7 +135,7 @@ tdeseq.default <- function(object,
     maxFC=maxFC[idx]
     }
     
-	if(mod == 'FastLMM')
+	if(mod == 'FastLMM' & fit.model == 'lmm')
 	{
 	sample.id=factor(sample.id,levels=unique(sample.id))
 	szs = unname(table(sample.id))
@@ -163,7 +163,7 @@ tdeseq.default <- function(object,
 	  if(verbose) cat("# fitting cell-based TDEseq model ... \n")
 	  basis=list()
 	  basis[[1]]<-basisfunction(x=stage.id,type=1,knots=unique(stage.id),fit.model=fit.model)
-      basis[[2]]<-basisfunction(x=stage.id,type=2,knots=unique(stage.id),fit.model=fit.model)  
+          basis[[2]]<-basisfunction(x=stage.id,type=2,knots=unique(stage.id),fit.model=fit.model)  
 	  basis[[3]]<-basisfunction(x=stage.id,type=3,knots=unique(stage.id),fit.model=fit.model)
 	  basis[[4]]<-basisfunction(x=stage.id,type=4,knots=unique(stage.id),fit.model=fit.model)
 		#=====================================
