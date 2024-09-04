@@ -1,12 +1,7 @@
-cell_aggregate<-function(counts,group,stage,size=20)
+cell_aggregate<-function(counts,group,stage,cov,size=20)
 {
 suppressPackageStartupMessages(library("Seurat"))
-if(is.null(cov))
-{
 meta=data.frame(cell=colnames(counts),group=group,stage=stage)
-}else{
-meta=data.frame(cell=colnames(counts),group=group,stage=stage,cov=cov)
-}
 N=length(unique(group))
 
 pseudolabel<-lapply(1:N,function(x){
@@ -24,7 +19,7 @@ return(pseudolabel)
 })
 pseudolabel=do.call(c,pseudolabel)
 meta$pseudolabel=pseudolabel
-
+cov$pseudolabel=pseudolabel
 pseudocell=unique(pseudolabel)
 pseudo_num=length(pseudocell)
 pseudo_counts<-lapply(1:pseudo_num,function(x){
@@ -44,6 +39,18 @@ colnames(pseudo_counts)=pseudocell
 
 idx=duplicated(meta$pseudolabel)
 pseudo_meta=meta[which(idx==FALSE),]
+
+for(i in 1:(ncol(cov)-1))
+{
+for(j in unique(cov$pseudolabel))
+{
+idx=which(cov$pseudolabel==j)
+if(sum(duplicated(cov[idx,i]))!=(length(idx)-1))
+{
+cov[idx[1],i]=sum(cov[idx,i])
+}
+}
+}
 
 idx=match(pseudo_meta$pseudolabel,colnames(pseudo_counts))		
 pseudo_counts=pseudo_counts[,idx]		
