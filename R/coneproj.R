@@ -1,12 +1,20 @@
-basisfunction<-function(x,knots=0,type,fit.model='lmm',nsim=100)
+basisfunction<-function(x,zmat=NULL,knots=0,type,fit.model='lmm',nsim=100)
 {
     if(fit.model!='lmm')
 	{
 	n=length(x)
     c=1.2
     one = 1:n * 0 + 1
+	if(!is.null(zmat))
+	{
+	    zmat=as.matrix(zmat)
+        k = dim(zmat)[2]
+        zmat = cbind(one, zmat)
+        k = k + 1
+	}else{
     zmat = matrix(one, ncol = 1)
     k = 1
+	}
     add = 3
     if (type > 2) {
         add = 4
@@ -79,6 +87,11 @@ basisfunction<-function(x,knots=0,type,fit.model='lmm',nsim=100)
 	xmat=as.matrix(x)
     n = length(x)
 	capl = length(xmat) / n  ##numbers of predictors
+	if(!is.null(zmat))
+	{
+	zmat=as.matrix(zmat)
+	capk=length(zmat)/n
+	}
 	delta = NULL
 	varlist = NULL
 	xid1 = NULL; xid2 = NULL; xpos2 = 0  ##position of nonlinear term
@@ -108,6 +121,18 @@ basisfunction<-function(x,knots=0,type,fit.model='lmm',nsim=100)
 		
 		 xvec = NULL
 		 
+if(!is.null(zmat))
+{
+if(shape==9 | shape==10)
+{
+bigmat = rbind(1:n*0 + 1, t(zmat), delta)
+np = 1 + capk + capms
+}else{
+xvec = t(xmat[, shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13])
+bigmat = rbind(1:n*0 + 1, t(zmat), xvec, delta)
+np = 1 + capk + sum(shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13)  + capms
+}
+}else{	 
 if(shape==9 | shape==10)
 {
 bigmat = rbind(1:n*0 + 1, delta)
@@ -115,6 +140,7 @@ np = 1 + capms
 }else{
 bigmat <- rbind(1:n*0 + 1, t(xmat[, shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13]), delta)
 np <- 1 + sum(shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13) + capms
+}
 }
 capm <- length(delta) / n - capms
 		
@@ -146,7 +172,9 @@ conspline<-function(y,x,basis,type,zmat = 0, wt=0, test=TRUE, c=1.2, nsim=10000)
     delta=basis$delta
 	mdist=basis$mdist
 	slopes=basis$slopes
-    n = length(y)
+	n = length(y)
+	zmat=as.matrix(zmat)
+	one = 1:n * 0 + 1
     if (n < 10) {
         print("ERROR: must have at least 10 observations")
     }
@@ -165,8 +193,7 @@ conspline<-function(y,x,basis,type,zmat = 0, wt=0, test=TRUE, c=1.2, nsim=10000)
             print("ERROR: number of rows of zmat must be length of y")
         }
         k = dim(zmat)[2]
-        rone = one - zmat %*% solve(t(zmat) %*% zmat) %*% t(zmat) %*% 
-            one
+        rone = one - zmat %*% solve(t(zmat) %*% zmat) %*% t(zmat) %*% one
         if (sum(rone^2) > 1e-08) {
             zmat = cbind(one, zmat)
             k = k + 1
@@ -283,7 +310,8 @@ conspline<-function(y,x,basis,type,zmat = 0, wt=0, test=TRUE, c=1.2, nsim=10000)
 
 
 ############LMM function########################
-conespline_lmm<-function(x,y,basis,group,shape=9,test=TRUE,nsim=100,mod.uniroot=mod.uniroot)
+############LMM function########################
+conespline_lmm<-function(x,y,zmat=NULL,basis,group,shape=9,test=TRUE,eiglist=NULL,nsim=100,mod='FastLMM')
 { ## adjust
     bigmat=basis$bigmat
 	mdist=basis$mdist
@@ -297,6 +325,11 @@ conespline_lmm<-function(x,y,basis,group,shape=9,test=TRUE,nsim=100,mod.uniroot=
 	ycl = f_ecl(y, ncl, szs)  #observations for each group
 	sm = 1e-7 
 	capl = length(xmat) / n  ##numbers of predictors
+    zmat=as.matrix(zmat)
+	if(length(zmat) > 1)
+	{
+	capk=length(zmat)/n
+	}
 	delta = NULL
 	varlist = NULL
 	xid1 = NULL; xid2 = NULL; xpos2 = 0  ##position of nonlinear term
@@ -326,6 +359,18 @@ conespline_lmm<-function(x,y,basis,group,shape=9,test=TRUE,nsim=100,mod.uniroot=
 		
 		 xvec = NULL
 		 
+if(length(zmat) > 1)
+{
+if(shape==9 | shape==10)
+{
+bigmat = rbind(1:n*0 + 1, t(zmat), delta)
+np = 1 + capk + capms
+}else{
+xvec = t(xmat[, shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13])
+bigmat = rbind(1:n*0 + 1, t(zmat), xvec, delta)
+np = 1 + capk + sum(shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13)  + capms
+}
+}else{	 
 if(shape==9 | shape==10)
 {
 bigmat = rbind(1:n*0 + 1, delta)
@@ -333,6 +378,7 @@ np = 1 + capms
 }else{
 bigmat <- rbind(1:n*0 + 1, t(xmat[, shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13]), delta)
 np <- 1 + sum(shapes > 2 & shapes < 5 | shapes > 10 & shapes < 13) + capms
+}
 }
 capm <- length(delta) / n - capms
 		
@@ -358,7 +404,8 @@ capm <- length(delta) / n - capms
 		xms = ones = list()
         st = 1
         ed = 0
-		
+	if(mod!='FastLMM')
+    {	
 		for (icl in 1:ncl) {
             sz = szs[icl]
             ed = ed + sz
@@ -368,7 +415,7 @@ capm <- length(delta) / n - capms
             ones[[icl]] = onemat
             st = ed + 1
         }
-		
+		}
 		muhat = t(bigmat) %*% bh
 		oldmu = muhat
 #########update mu and sigma iterately##########		
@@ -378,10 +425,13 @@ capm <- length(delta) / n - capms
 		
 		nrep = nrep + 1
 		evec = y - muhat    ##residuals a+e
+		
+		
+		
 		ecl = f_ecl(evec, ncl, szs)  ## residuals by group
         mod.lmer = NULL
 
-		if(mod.uniroot)
+		if(mod == 'uniroot')
 		{
 		ansi = try(ansi0<-uniroot(fth2rm, c(1e-10, 1e+3), szs=szs, ycl=ecl, N=n, xcl=xms, p=edf, type='ub', xtx=xtx, xtx2=xtx2, xmat_face=dd, ones=ones), silent=TRUE)
         if (class(ansi) == "try-error") {
@@ -389,7 +439,7 @@ capm <- length(delta) / n - capms
         } else {
             thhat = ansi$root
         }
-		}else{
+		}else if(mod == 'nlme'){
 	#	 mod.lmer = try(mod.lmer0<-lmer(evec~-1+(1|id), REML=FALSE,verbose=0),silent=TRUE)
 	    mod.lmer = try(mod.lmer0 <- nlme::lme(evec~ 1, random = ~1|id),silent=TRUE) 
 		if(class(mod.lmer)=='try-error')
@@ -398,16 +448,20 @@ capm <- length(delta) / n - capms
 		}else{
 		thhat = as.numeric(nlme::VarCorr(mod.lmer)[2,1])
 		}
+		}else if(mod == 'FastLMM'){
+		thhat = try(ansi0 <- FastLMM(y=evec, z=zsend,eiglist=eiglist,szs=szs,ncl=ncl))		
 		}
 		
 		
 		type = "ub"
 ############update mu gaven a ############		
-	ytil = NULL 
+	        ytil = NULL 
 #gtil is edges
 			gtil = NULL
 			st = 1
 			ed = 0
+    if(mod!='FastLMM')
+	{
 			sz = max(szs)
             pos = which(szs == sz)[1]
             oneMat = ones[[pos]]
@@ -427,6 +481,18 @@ capm <- length(delta) / n - capms
 				gtil = rbind(gtil, uinv %*% gmat[st:ed, ,drop=F])
 				st = ed + 1
 			}
+	}else{
+
+		    for (icl in 1:ncl) {
+		    uinv0 = row.multiple(eiglist[[icl]]$vectors,sqrt((1/(eiglist[[icl]]$values*thhat$h2+1*(1-thhat$h2)))))
+		    ytil=c(ytil, ycl[[icl]]%*%uinv0) 
+            ed = ed+szs[icl]
+            gtil = cbind(gtil, t(gmat[st:ed, ,drop=F])%*%uinv0)
+		    st = ed + 1
+	        }
+			gtil=t(gtil)
+	}
+
 			#####weighted coneB #########
 			dsend = gtil[, (np + 1):(np + capm), drop = FALSE]
             zsend = gtil[, 1:np, drop = FALSE]
@@ -454,9 +520,16 @@ capm <- length(delta) / n - capms
                 }
 			}
 		ebars = sapply(ecl, mean)
+		if(mod!='FastLMM')
+		{
 		sig2hat = fsig(thhat, szs, ecl, ncl, N=n, edf=edf, D=nrow(bigmat), type=type)
 		siga2hat = sig2hat * thhat 
 		ahat = ebars*szs*thhat/(1+szs*thhat)
+		}else{
+		sig2hat = thhat$sigma * (1-thhat$h2)
+		siga2hat = thhat$sigma * thhat$h2
+		ahat = ebars * szs * (thhat$h2/(1-thhat$h2)) / (1 + szs * (thhat$h2/(1-thhat$h2)) )
+		}
 	#################testing####################
 	if(test)
 	{
@@ -464,6 +537,8 @@ capm <- length(delta) / n - capms
 	        gtil = NULL
 			st = 1
 			ed = 0
+			if(mod != 'FastLMM')
+			{
 			sz = max(szs)
             pos = which(szs == sz)[1]
             oneMat = ones[[pos]]
@@ -484,6 +559,19 @@ capm <- length(delta) / n - capms
 				st = ed + 1
 			}
 			#####weighted coneB #########
+			}else{
+			
+			for (icl in 1:ncl) {
+		    uinv0 = row.multiple(eiglist[[icl]]$vectors,sqrt((1/(eiglist[[icl]]$values*thhat$h2+1*(1-thhat$h2)))))
+		    ytil=c(ytil, ycl[[icl]]%*%uinv0) 
+            ed = ed+szs[icl]
+            gtil = cbind(gtil, t(gmat[st:ed, ,drop=F])%*%uinv0)
+		    st = ed + 1
+	        }
+			gtil=t(gtil)
+			
+			
+			}
 			dsend = gtil[, (np + 1):(np + capm), drop = FALSE]
             zsend = gtil[, 1:np, drop = FALSE]
 			yhat=gtil%*%bh                                                    #34.20664
@@ -509,6 +597,11 @@ capm <- length(delta) / n - capms
 		}
 		pval=1-ps
     }
+	if(mod!='FastLMM')
+	{
 	rslt = list(muhat = muhat,  bh = bh,ahat = ahat, sig2hat = sig2hat, siga2hat = siga2hat, thhat = thhat, bigmat = bigmat,pval=pval,bstat=bstat)
+	}else{
+	rslt = list(muhat = muhat,  bh = bh,ahat = ahat, sig2hat = sig2hat, siga2hat = siga2hat, thhat = thhat$h2/(1-thhat$h2), bigmat = bigmat,pval=pval,bstat=bstat)
+	}
     return (rslt)
 }

@@ -20,7 +20,7 @@
 #' @param lfc Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.
 #' @param max.gcells Maximum cell per group. If max.gcells is smaller than the given number of cells in each group, the down-sampling will be active. 
 #' @param min.tcells Minimum number of cells in each time points required. 
-#' @param mod.uniroot Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.  
+#' @param mod Variance component estimation is done either by a linear mixed model implemented in the nlme package(nlme) uniroot, or FastLMM. The uniroot estimation is much more accurate but very time consuming, FastLMM mod is recommended.  
 #' @param tdeseq.method Performing 'cell' or 'pseudocell' strategy. Default is 'cell'.
 #' 
 #' 
@@ -36,36 +36,60 @@ tdeseq.default <- function(object,
                   					tde.method = "cell",
                   					sample.id = NULL,
                   					stage.id = NULL,
+									cov.id = NULL,
                   					fit.model = "lmm",
                   					pct = 0.1,
                   					tde.thr = 0.05,
                   					lfc = 0.0,
                   					max.gcells = Inf,
                   					min.tcells = 3,
-									mod.uniroot=FALSE,
+									mod = "FastLMM",
                   					num.core = 1, 
                   					verbose = FALSE) {
+
+    ## filtering time points ##
+    num_cell_per_timepoints=table(stage.id)
+    idx=names(num_cell_per_timepoints)[which(num_cell_per_timepoints<min.tcells)]
+    if(length(idx)>0)
+    {
+    for(i in idx)
+    {
+    object=object[,-which(stage.id==i)]
+    if(!is.null(sample.id))
+    {
+    sample.id=sample.id[-which(stage.id==i)]
+    }
+	if(!is.null(cov.id))
+    {
+    cov.id=data.frame(cov.id[-which(stage.id==i)])
+    }
+    stage.id=stage.id[-which(stage.id==i)]
+    }
+    }
 	
     if(tde.method == "pseudocell")
 	{	   
 	##*************************************************##
 	##   Performing Temporal DE based on PseudoCell    ##
 	##*************************************************##
-	   obj<-cell_aggregate(object,sample.id,stage.id)
+	   obj<-cell_aggregate(object,sample.id,stage.id,cov.id)
 	   sample.id=obj@meta.data$group
 	   stage.id=obj@meta.data$stage
 	   object=Seurat::GetAssayData(obj,'data')
        rm(obj)
 	}
 
+	
 	## reordering data ##
-	stage_idx=sort(unique(stage.id))
-	stage_origin=stage.id
+	stage_idx<-sort(unique(stage.id))
+	stage_origin<-stage.id
+	
+	stage.id<-rep(0,length(stage_origin))
 	
 	points_order=0
     for(i in stage_idx)
     {
-    stage.id[which(stage.id==i)]=points_order
+    stage.id[which(stage_origin==i)]=points_order
     points_order=points_order+1
     }
 
@@ -77,22 +101,10 @@ tdeseq.default <- function(object,
     {
     sample.id=sample.id[reorder_idx]
     } 
-	
-	## filtering time points ##
-	num_cell_per_timepoints=table(stage.id)
-	idx=names(num_cell_per_timepoints)[which(num_cell_per_timepoints<min.tcells)]
-	if(length(idx)>0)
-    {
-    for(i in idx)
-    {
-    object=object[,-which(stage.id==i)]
-    if(!is.null(sample.id))
-    {
-    sample.id=sample.id[-which(stage.id==i)]
-    }
-    stage.id=stage.id[-which(stage.id==i)]
-    }
-    }
+	if(!is.null(cov.id))
+	{
+	cov.id=data.frame(cov.id[reorder_idx,])
+	}
 	
 	##  downsampling  ##
 	if(is.null(max.gcells))
@@ -114,7 +126,10 @@ tdeseq.default <- function(object,
 	object=object[,cell_sel]
 	sample.id=sample.id[cell_sel]
 	stage.id=stage.id[cell_sel]
-    
+    if(!is.null(cov.id))
+	{
+	cov.id=data.frame(cov.id[cell_sel,])
+	}
 	## filtering features ##
 	maxFC<-logFC_filtering(object,stage.id)
 	idx=which(maxFC>lfc)
@@ -133,6 +148,14 @@ tdeseq.default <- function(object,
     maxFC=maxFC[idx]
     }
     
+	if(mod == 'FastLMM' & fit.model == 'lmm')
+	{
+	sample.id=factor(sample.id,levels=unique(sample.id))
+	szs = unname(table(sample.id))
+	szs = szs[szs!=0]
+	eiglist = Generate_Kmatrix(szs)
+	}
+	
 	## number of cells and genes
 	num_cell <- ncol(object)
 	num_gene <- nrow(object)
@@ -147,16 +170,19 @@ tdeseq.default <- function(object,
 	cat(paste("## ===== END INFORMATION ==== \n"))
 	cat("\n")
 	
-    
 	
 	## main functions
 
 	  if(verbose) cat("# fitting cell-based TDEseq model ... \n")
 	  basis=list()
-	  basis[[1]]<-basisfunction(x=stage.id,type=1,knots=unique(stage.id),fit.model=fit.model)
-      basis[[2]]<-basisfunction(x=stage.id,type=2,knots=unique(stage.id),fit.model=fit.model)  
-	  basis[[3]]<-basisfunction(x=stage.id,type=3,knots=unique(stage.id),fit.model=fit.model)
-	  basis[[4]]<-basisfunction(x=stage.id,type=4,knots=unique(stage.id),fit.model=fit.model)
+	  basis[[1]]<-basisfunction(x=stage.id,zmat=cov.id,type=1,knots=unique(stage.id),fit.model=fit.model)
+      basis[[2]]<-basisfunction(x=stage.id,zmat=cov.id,type=2,knots=unique(stage.id),fit.model=fit.model)  
+	  basis[[3]]<-basisfunction(x=stage.id,zmat=cov.id,type=3,knots=unique(stage.id),fit.model=fit.model)
+	  basis[[4]]<-basisfunction(x=stage.id,zmat=cov.id,type=4,knots=unique(stage.id),fit.model=fit.model)
+	  if(is.null(cov.id))
+	  {
+	  cov.id=0
+	  }
 		#=====================================
 		#res_vc <- parallel::mclapply(seq_len(num_gene), mc.cores = num.core, function(x){
 		res.tdeseq <- pbmcapply::pbmclapply(seq_len(num_gene), mc.cores = num.core, function(x){
@@ -165,9 +191,10 @@ tdeseq.default <- function(object,
 		    res <- TDEseq.cell(data = object[x,],
 		                       stage = stage.id,
 		                       group = sample.id,
-		                       z = 0,
+		                       z = cov.id,
 		                       fit.model = fit.model,
-		                       basis=basis)
+		                       basis=basis,
+							   eiglist = eiglist)
 		      )
 		    }, warning=function(w){ 
 		      print(w); return(res);
@@ -188,7 +215,7 @@ tdeseq.default <- function(object,
 	dfTDEseqResults$pvalue=p
 	rownames(dfTDEseqResults)=genes.use
 	dfTDEseqResults$gene=rownames(dfTDEseqResults)
-    dfTDEseqResults$padj=p.adjust(p,method='BY')
+    dfTDEseqResults$padj=p.adjust(p,method='fdr')
 	dfTDEseqResults$SignificantDE='No'
     dfTDEseqResults$SignificantDE[which(dfTDEseqResults$padj<tde.thr)]='Yes'
 	dfTDEseqResults$pattern='None'
@@ -214,9 +241,14 @@ tdeseq.default <- function(object,
     }
     dfTDEseqResults$ChangePoint<-ChangePoint
 	
+	fit.inc <- do.call(cbind,res.tdeseq[seq(2,length(res.tdeseq),9)])
+	fit.dec <- do.call(cbind,res.tdeseq[seq(3,length(res.tdeseq),9)])
+	fit.cov <- do.call(cbind,res.tdeseq[seq(4,length(res.tdeseq),9)])
+	fit.con <- do.call(cbind,res.tdeseq[seq(5,length(res.tdeseq),9)])
 	
-	
-	return(dfTDEseqResults)
+	ModelFits<-GetModelFits(dfTDEseqResults,list(fit.inc,fit.dec,fit.cov,fit.con),stage.id)
+	out<-list(dfTDEseqResults=dfTDEseqResults,ModelFits=ModelFits)
+	return(out)
 }## end function 
 
 
@@ -230,7 +262,7 @@ tdeseq.default <- function(object,
 #' @param lfc Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.
 #' @param max.gcells Maximum cell per group. If max.gcells is smaller than the given number of cells in each group, the down-sampling will be active. 
 #' @param min.tcells Minimum number of cells in each time points required. 
-#' @param mod.uniroot Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.  
+#' @param mod Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.  
 #' @param tdeseq.method Performing 'cell' or 'pseudocell' strategy. Default is 'cell'.
 #' 
 #' @method TDEseq TDEseq
@@ -250,13 +282,14 @@ tdeseq.Assay <- function(object,
                         	tde.method = "cell",
                         	tde.param = list(sample.var = "group",
                         	                 stage.var = "stage",
+											 cov.var = NULL,
                         	                 fit.model = "lmm",
                         	                 pct = 0.1,
                         	                 tde.thr = 0.05,
                         	                 lfc = 0.0,
                         	                 max.gcells = Inf,
                         	                 min.tcells = 3,
-											 mod.uniroot=FALSE),
+											 mod='FastLMM'),
                         	num.core = 1,
                         	verbose = TRUE, ...) {
 	
@@ -276,7 +309,21 @@ tdeseq.Assay <- function(object,
 	  stop("The variable 'stage.var' is not in the 'meta.data'!")
 	}## end fi
 	
-
+    if(is.null(tde.param$cov.var))
+	{
+	cov.id=NULL
+	}else{
+	if(all(tde.param$cov.var %in% colnames(meta.data))){
+	  cov.id <- meta.data[,tde.param$cov.var,drop=TRUE]
+	  if(class(cov.id)!='data.frame')
+	  {
+	  cov.id=data.frame(cov.id)
+	  }
+	}else{
+	  stop("The variable 'stage.var' is not in the 'meta.data'!")
+	}## end fi
+	}
+	
 	if(length(data.use) == 0){
 	  counts <- GetTDEseqAssayData(object = object, slot = "counts")
 	  if(length(counts) == 0){
@@ -296,6 +343,7 @@ tdeseq.Assay <- function(object,
               				tde.method = tde.method,
               				sample.id = sample.id, 
               				stage.id = stage.id,
+							cov.id = cov.id,
               				pct = tde.param$pct,
               				tde.thr = tde.param$tde.thr,
               				lfc = tde.param$lfc,
@@ -307,7 +355,9 @@ tdeseq.Assay <- function(object,
 					
 
 	## store the scaled data in the slot
-	object <- SetAssayData(object = object, slot = 'tde', new.data = new.data)
+	object <- SetAssayData(object = object, slot = 'tde', new.data = new.data$dfTDEseqResults)
+	object <- SetAssayData(object = object, slot = 'fit', new.data = new.data$ModelFits)
+	return(object)
 	## store top number of features in tde slot
 }## end func
 
@@ -321,7 +371,7 @@ tdeseq.Assay <- function(object,
 #' @param lfc Limit testing to genes which show the maximum on average X-fold difference (log-scale) between any two time points. Default is 0.0.
 #' @param max.gcells Maximum cell per group. If max.gcells is smaller than the given number of cells in each group, the down-sampling will be active. 
 #' @param min.tcells Minimum number of cells in each time points required. 
-#' @param mod.uniroot Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.  
+#' @param mod Variance component estimation is done either by a linear mixed model implemented in the nlme package or by niroot. The uniroot estimation is much more accurate but very time consuming.  
 #' @param tdeseq.method Performing 'cell' or 'pseudocell' strategy. Default is 'cell'.
 #' 
 #' @return object An TDEseq object
@@ -342,13 +392,14 @@ tdeseq.TDEseq <- function(object,
                             tde.method = "cell",
                             tde.param = list(sample.var = "group",
                                              stage.var = "stage",
+											 cov.var = NULL,
                                              fit.model = "lmm",
                                              pct = 0.1,
                                              tde.thr = 0.05,
                                              lfc = 0.0,
                                              max.gcells = Inf,
                                              min.tcells = 3,
-											 mod.uniroot=FALSE),
+											 mod='FastLMM'),
                             num.core = 1,
                             verbose = TRUE, ...) {
 	
@@ -446,14 +497,15 @@ TDEseq.cell<-function(data,
 					  z=0,
 					  fit.model='lmm',
                       basis=basis,
-					  mod.uniroot=FALSE)
+					  mod='FastLMM',
+					  eiglist=NULL)
 {
 if(fit.model!='lmm')
 {
-fit.incr<-conspline(data,stage,basis=basis[[1]],type=1,test=TRUE)
-fit.decr<-conspline(data,stage,basis=basis[[2]],type=2,test=TRUE)
-fit.conv<-conspline(data,stage,basis=basis[[3]],type=3,test=TRUE)
-fit.conc<-conspline(data,stage,basis=basis[[4]],type=4,test=TRUE)
+fit.incr<-conspline(data,stage,zmat=z,basis=basis[[1]],type=1,test=TRUE)
+fit.decr<-conspline(data,stage,zmat=z,basis=basis[[2]],type=2,test=TRUE)
+fit.conv<-conspline(data,stage,zmat=z,basis=basis[[3]],type=3,test=TRUE)
+fit.conc<-conspline(data,stage,zmat=z,basis=basis[[4]],type=4,test=TRUE)
 
 res<-data.frame(increasing.pvalue=fit.incr$pvalx,decreasing.pvalue=fit.decr$pvalx,convex.pvalue=fit.conv$pvalx,concave.pvalue=fit.conc$pvalx)
 results<-list(res=res,est.inc=fit.incr$muhat,est.dec=fit.decr$muhat,est.cov=fit.conv$muhat,est.con=fit.conc$muhat,sig.inc=fit.incr$sighat,sig.dec=fit.decr$sighat,
@@ -470,10 +522,10 @@ cout=cout+1
 group=as.numeric(group_numeric)
 
 
-fit.incr<-conespline_lmm(y=data,x=stage,basis=basis[[1]],group,shape=9,mod.uniroot=mod.uniroot)
-fit.decr<-conespline_lmm(y=data,x=stage,basis=basis[[2]],group,shape=10,mod.uniroot=mod.uniroot)
-fit.conv<-conespline_lmm(y=data,x=stage,basis=basis[[3]],group,shape=11,mod.uniroot=mod.uniroot)
-fit.conc<-conespline_lmm(y=data,x=stage,basis=basis[[4]],group,shape=12,mod.uniroot=mod.uniroot)
+fit.incr<-conespline_lmm(y=data,x=stage,zmat=z,basis=basis[[1]],group,shape=9,eiglist=eiglist,mod=mod)
+fit.decr<-conespline_lmm(y=data,x=stage,zmat=z,basis=basis[[2]],group,shape=10,eiglist=eiglist,mod=mod)
+fit.conv<-conespline_lmm(y=data,x=stage,zmat=z,basis=basis[[3]],group,shape=11,eiglist=eiglist,mod=mod)
+fit.conc<-conespline_lmm(y=data,x=stage,zmat=z,basis=basis[[4]],group,shape=12,eiglist=eiglist,mod=mod)
 
 
 
@@ -484,18 +536,6 @@ return(results)
 
 }
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

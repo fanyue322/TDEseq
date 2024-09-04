@@ -16,13 +16,10 @@ suppressPackageStartupMessages(library("Seurat"))
 suppressPackageStartupMessages(library("ggplot2"))
 suppressPackageStartupMessages(library("ComplexHeatmap"))
 suppressPackageStartupMessages(library("circlize"))
-data.norm<-GetTDEseqAssayData(tde,'data')
-seu<-CreateSeuratObject(data.norm)
-seu@assays$RNA@data<-data.norm
-seu<-ScaleData(seu)
-mat <- GetAssayData(seu,slot = 'scale.data')
-metadata <- GetTDEseqAssayData(tde,'meta.data')
-res_dat=GetTDEseqAssayData(tde,'tde')
+data.norm<-GetTDEseqAssayData(obj,'data')
+mat<-Seurat::ScaleData(data.norm)
+metadata <- GetTDEseqAssayData(obj,'meta.data')
+res_dat=GetTDEseqAssayData(obj,'tde')
 res_dat=res_dat[order(res_dat$pvalue),]
 feature_annot=c()
 if(is.null(features))
@@ -146,10 +143,10 @@ return(p)
 
 #' PatternLine: Line plot to show the pattern specific temporal genes. Please first install ggplot2.
 #' 
-#' @param seuobj A seurat object with UMAP embeddings been calculated
-#' @param features Genes to be shown in feature plot
+#' @param tdeobj A tdeseq object
+#' @param features Genes to be shown in line plot
 #' @author Yue Fan, Shiquan Sun
-
+#' @export
 PatternLine<-function (obj, feature.show = NULL, cols = NULL) 
 {
     if(is.null(cols))
@@ -157,13 +154,16 @@ PatternLine<-function (obj, feature.show = NULL, cols = NULL)
 	cols=c('#E50C7D',"#E34627","#A22066","#A474A4","#2D8573","#E1DE15","#C16728","#2578BE","#738DC8","#C0C0C0", '#7d8d8e','#2a24d0','#a2292e','#274382','#838d36')
 	}
     suppressPackageStartupMessages(library("ggplot2"))
-	feature.show=feature.show[feature.show%in%rownames(obj@ModelFits)]
+	dat <- GetTDEseqAssayData(obj,slot='fit')
+	feature.show=feature.show[feature.show%in%rownames(dat)]
 	if(length(feature.show)==0)
 	{
 	stop(paste0("Genes to be shown are not specified!!"))
 	}
-    dat = obj@ModelFits[feature.show, ]
-    time = sort(unique(obj@Metadata$Time_Origin))
+	
+	time=as.numeric(colnames(dat))
+    dat = dat[feature.show, ]
+    
 	N=length(feature.show)
 	if(N!=1)
 	{

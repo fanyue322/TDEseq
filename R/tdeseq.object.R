@@ -74,7 +74,8 @@ Assay <- setClass(
 		tde = "data.frame",
 		svg = "ANY",
 		de.truth = "ANY",
-		misc = "ANY"))
+		misc = "ANY",
+		fit = "matrix"))
 
 
 ###########################################
@@ -948,7 +949,8 @@ GetTDEseqAssayData.Assay <- function(object,
 	'tde',
 	'dr',
 	'svg',
-	'de.truth'), ...) {
+	'de.truth',
+	'fit'), ...) {
 	slot <- slot[1]
 	slot <- match.arg(arg = slot)
 	return(slot(object = object, name = slot))
@@ -1008,7 +1010,8 @@ SetAssayData.Assay <- function(object,
 	'dr',
 	'tde',
 	'svg',
-	'de.truth'), ...) {
+	'de.truth',
+	'fit'), ...) {
   
 	slot <- slot[1]
 	slot <- match.arg(arg = slot)
