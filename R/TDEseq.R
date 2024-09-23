@@ -252,7 +252,6 @@ tdeseq.default <- function(object,
 }## end function 
 
 
-
 #' @param object An TDEseq object 
 #'
 #' @rdname TDEseq

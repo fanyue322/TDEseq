@@ -83,8 +83,13 @@ idx=1:nrow(res_dat)
 shape_index=c("Growth","Recession","Trough","Peak")
 for(k in idx)
 {
+if(!is.nan(bstat[k,1]))
+{
 tmp=bstat[k,]
 shape[k]=shape_index[which(tmp==max(tmp)[1])]
+}else{
+shape[k]=NA
+}
 }
 return(shape)
 }
