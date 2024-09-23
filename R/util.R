@@ -83,9 +83,9 @@ idx=1:nrow(res_dat)
 shape_index=c("Growth","Recession","Trough","Peak")
 for(k in idx)
 {
-if(!is.nan(bstat[k,1]))
-{
 tmp=bstat[k,]
+if(!any(is.nan(as.matrix(tmp))))
+{
 shape[k]=shape_index[which(tmp==max(tmp)[1])]
 }else{
 shape[k]=NA
@@ -280,23 +280,6 @@ ComputeACAT <- function(Pvals, Weights=NULL){
  }## end fi
  return(pval)
 }## end func
-
-shape_bstat_lmm<-function(res_dat)
-{
-shape=rep('NA',nrow(res_dat))
-idx=match(c('b.inc', 'b.dec', 'b.cov', 'b.con'),colnames(res_dat))
-bstat=res_dat[,idx]
-#idx=which((res_dat$shape!='None'))
-idx=1:nrow(res_dat)
-shape_index=c("Growth","Recession","Trough","Peak")
-for(k in idx)
-{
-tmp=bstat[k,]
-shape[k]=shape_index[which(tmp==max(tmp)[1])]
-}
-return(shape)
-}
-
 #################functions from package CGAM##################
 
 f_ecl = function(evec, ncl, sz) {
