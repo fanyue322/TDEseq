@@ -473,7 +473,7 @@ CreateTDEseqObject.SingleCellExperiment <- function(counts,
   ## create the list for assays
   assay.list <- list()
   assay.data <- CreateObject.Each(counts = SummarizedExperiment::assay(x = counts, i = "counts"),
-                                  data = NULL, 
+                                  data = SummarizedExperiment::assay(x = counts, i = "logcounts"), 
                                   meta.data = as.data.frame(SummarizedExperiment::colData(x = counts)),
                                   min.cells = min.cells,
                                   pct.cells = pct.cells,
