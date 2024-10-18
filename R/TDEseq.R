@@ -48,6 +48,8 @@ tdeseq.default <- function(object,
                   					verbose = FALSE) {
 
     ## filtering time points ##
+	if(!length(unique(stage.id))==length(stage.id))
+	{
     num_cell_per_timepoints=table(stage.id)
     idx=names(num_cell_per_timepoints)[which(num_cell_per_timepoints<min.tcells)]
     if(length(idx)>0)
@@ -147,6 +149,8 @@ tdeseq.default <- function(object,
     object=object[idx,]
     maxFC=maxFC[idx]
     }
+	
+	}
     
 	if(mod == 'FastLMM' & fit.model == 'lmm')
 	{
@@ -175,10 +179,18 @@ tdeseq.default <- function(object,
 
 	  if(verbose) cat("# fitting cell-based TDEseq model ... \n")
 	  basis=list()
+	  if(!length(unique(stage.id))==length(stage.id))
+	  {
 	  basis[[1]]<-basisfunction(x=stage.id,zmat=cov.id,type=1,knots=unique(stage.id),fit.model=fit.model)
       basis[[2]]<-basisfunction(x=stage.id,zmat=cov.id,type=2,knots=unique(stage.id),fit.model=fit.model)  
 	  basis[[3]]<-basisfunction(x=stage.id,zmat=cov.id,type=3,knots=unique(stage.id),fit.model=fit.model)
 	  basis[[4]]<-basisfunction(x=stage.id,zmat=cov.id,type=4,knots=unique(stage.id),fit.model=fit.model)
+	  }else{
+	  basis[[1]]<-basisfunction(x=stage.id,zmat=cov.id,type=1,fit.model=fit.model)
+      basis[[2]]<-basisfunction(x=stage.id,zmat=cov.id,type=2,fit.model=fit.model)  
+	  basis[[3]]<-basisfunction(x=stage.id,zmat=cov.id,type=3,fit.model=fit.model)
+	  basis[[4]]<-basisfunction(x=stage.id,zmat=cov.id,type=4,fit.model=fit.model) 
+	  }
 	  if(is.null(cov.id))
 	  {
 	  cov.id=0
@@ -231,6 +243,8 @@ tdeseq.default <- function(object,
 	dfTDEseqResults$b.con=do.call(c,res.tdeseq[seq(9,length(res.tdeseq),9)])
 	shape<-shape_bstat_lmm(dfTDEseqResults)
 	}
+	if(!length(unique(stage.id))==length(stage.id))
+	{
     dfTDEseqResults$pattern[which(dfTDEseqResults$SignificantDE=='Yes')]=shape[which(dfTDEseqResults$SignificantDE=='Yes')]
     dfTDEseqResults$logFC=maxFC
     ChangePoint<-ChangePoint_detection(dfTDEseqResults,stage.id,res.tdeseq)
@@ -240,14 +254,18 @@ tdeseq.default <- function(object,
     ChangePoint<-stage_idx[ChangePoint]
     }
     dfTDEseqResults$ChangePoint<-ChangePoint
-	
+	}
+	if(!length(unique(stage.id))==length(stage.id))
+	{
 	fit.inc <- do.call(cbind,res.tdeseq[seq(2,length(res.tdeseq),9)])
 	fit.dec <- do.call(cbind,res.tdeseq[seq(3,length(res.tdeseq),9)])
 	fit.cov <- do.call(cbind,res.tdeseq[seq(4,length(res.tdeseq),9)])
 	fit.con <- do.call(cbind,res.tdeseq[seq(5,length(res.tdeseq),9)])
-	
 	ModelFits<-GetModelFits(dfTDEseqResults,list(fit.inc,fit.dec,fit.cov,fit.con),stage.id)
 	out<-list(dfTDEseqResults=dfTDEseqResults,ModelFits=ModelFits)
+	}else{
+	out<-list(dfTDEseqResults=dfTDEseqResults,ModelFits=matrix(0,nrow=0,ncol=0))
+	}
 	return(out)
 }## end function 
 
